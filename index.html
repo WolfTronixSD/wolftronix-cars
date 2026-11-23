@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#14161b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Cars">
+<meta name="robots" content="noindex">
+<title>WolfTronix Cars</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='29' fill='%23e10600' stroke='%23fff' stroke-width='5'/%3E%3Ctext x='32' y='44' font-family='Arial' font-weight='900' font-style='italic' font-size='34' fill='%23fff' text-anchor='middle'%3E2%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%2314161b'/%3E%3Ccircle cx='32' cy='32' r='24' fill='%23e10600' stroke='%23fff' stroke-width='4'/%3E%3Ctext x='32' y='42' font-family='Arial' font-weight='900' font-style='italic' font-size='28' fill='%23fff' text-anchor='middle'%3E2%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+/* Same racing look as the CYD's own pages (cyd.local): dark asphalt, checkered flag, yellow and red. */
+:root{--bg:#14161b;--bg2:#171a20;--card:#20242d;--card2:#1a1d24;--well:#0d0f14;--line:#2c313b;--fg:#e8ecf2;--mute:#9aa7b8;
+--yel:#ffd400;--red:#e10600;--grn:#19c37d;--blu:#5cc8ff;--org:#ff8a00;--bad:#ff6b63;color-scheme:dark}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px;color:var(--fg);
+background:var(--bg) repeating-linear-gradient(135deg,var(--bg) 0 14px,var(--bg2) 14px 28px);min-height:100vh;
+padding-bottom:env(safe-area-inset-bottom,0px)}
+.flag{height:14px;background:repeating-conic-gradient(#fff 0 25%,#111 0 50%) 0 0/14px 14px}
+.top{position:sticky;top:0;z-index:20;background:var(--bg);padding-top:env(safe-area-inset-top,0px);box-shadow:0 4px 14px #0008}
+header{display:flex;align-items:center;gap:12px;padding:10px max(14px,env(safe-area-inset-right,0px)) 10px max(14px,env(safe-area-inset-left,0px))}
+.num{background:var(--red);color:#fff;font:italic 900 20px/1 sans-serif;width:40px;height:40px;display:flex;align-items:center;
+justify-content:center;border-radius:50%;border:3px solid #fff;flex:none}
+h1{margin:0;font:italic 900 22px/1.1 sans-serif;letter-spacing:1px;text-transform:uppercase}h1 span{color:var(--yel)}
+.sub{color:var(--mute);font-size:13px}
+.live{display:inline-flex;align-items:center;gap:6px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--mute);flex:none}
+.dot.on{background:var(--grn);box-shadow:0 0 0 0 #19c37d88;animation:pulse 2s infinite}.dot.wait{background:var(--yel)}.dot.off{background:var(--red)}
+@keyframes pulse{70%{box-shadow:0 0 0 7px #19c37d00}100%{box-shadow:0 0 0 0 #19c37d00}}
+main{max-width:760px;margin:0 auto;padding:4px max(12px,env(safe-area-inset-right,0px)) 24px max(12px,env(safe-area-inset-left,0px))}
+.n{background:linear-gradient(180deg,var(--card),var(--card2));border-radius:14px;margin:12px 0;padding:12px 14px;border-left:8px solid #555;
+box-shadow:0 4px 14px #0009;position:relative;overflow:hidden}
+.n.plain{border-left-color:var(--line)}
+.n.PARKED{border-color:var(--grn)}.n.AWAY{border-color:#777}.n.RUN{border-color:var(--blu)}.n.ALARM{border-color:var(--red)}.n.OFFLINE{border-color:#555}
+.n.car:after{content:"";position:absolute;right:-20px;top:0;bottom:0;width:80px;transform:skewX(-20deg);
+background:repeating-linear-gradient(90deg,#ffffff0a 0 9px,transparent 9px 18px);pointer-events:none}
+h2{margin:0 0 8px;font:italic 900 16px sans-serif;text-transform:uppercase;color:var(--yel);letter-spacing:1px}
+.b{font:italic 900 24px sans-serif;text-transform:uppercase;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.badge{font:normal 800 15px sans-serif;padding:3px 10px;border-radius:6px;letter-spacing:.5px}
+.PARKED .badge{background:var(--grn);color:#000}.AWAY .badge,.OFFLINE .badge{background:#777;color:#fff}.RUN .badge{background:var(--blu);color:#000}.ALARM .badge{background:var(--red);color:#fff}
+.where{margin-top:4px;color:var(--mute);font-size:14px}
+.where b{color:var(--fg)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.c{background:var(--well);border:1px solid var(--line);border-radius:20px;padding:5px 11px;font-size:13px;color:#c9d3e0}
+.c b{color:var(--yel);font-variant-numeric:tabular-nums}.c.bad b,.c.bad{color:var(--bad)}
+.g{height:10px;background:var(--well);border-radius:6px;margin:10px 0 2px;overflow:hidden}.g i{display:block;height:100%;border-radius:6px}
+.alarm{background:repeating-linear-gradient(45deg,var(--red) 0 16px,#a80400 16px 32px);padding:12px 14px;border-radius:10px;
+font:italic 900 19px sans-serif;margin:12px 0;animation:blink 1s infinite;color:#fff}
+@keyframes blink{50%{opacity:.6}}
+.warn{background:var(--yel);color:#000;padding:10px 14px;border-radius:10px;font-weight:700;margin:12px 0}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.tabs button,.btn{background:var(--well);color:var(--fg);border:1px solid #444;border-radius:16px;padding:6px 12px;font:inherit;font-size:14px;cursor:pointer}
+.tabs button.on{outline:2px solid var(--yel);font-weight:700}
+.btn.y{background:var(--yel);color:#000;border:0;font-weight:800;text-decoration:none;display:inline-block}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--yel);outline-offset:2px}
+#map{height:340px;border-radius:10px;background:var(--well);z-index:1}
+.leaflet-container{font:inherit}
+.k{display:inline-block;padding:8px 11px;border:1px solid #444;border-radius:10px;font-size:13px;vertical-align:top;color:var(--mute);min-width:96px}
+.k b{display:block;font-size:19px;color:var(--yel);font-variant-numeric:tabular-nums}
+.sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:8px;margin-bottom:10px}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+td,th{padding:7px 6px;border-bottom:1px solid #2a2e37;text-align:left;font-size:14px;white-space:nowrap}
+th{color:var(--mute);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+#trips tr[data-t]{cursor:pointer}#trips tr.on td{color:var(--yel);font-weight:700}
+#log td{white-space:normal;font-size:13px;vertical-align:top}#log td:first-child{white-space:nowrap;color:var(--mute)}
+.bad{color:var(--bad);font-weight:700}
+.doors{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.door{background:var(--well);border:1px solid var(--line);border-radius:10px;padding:9px 11px;border-left:6px solid #555}
+.door.CLOSED{border-left-color:var(--grn)}.door.OPEN,.door.MOVING{border-left-color:var(--red)}
+.door b{display:block;font:italic 900 16px sans-serif;text-transform:uppercase}
+.door .st{font-weight:800}.door span{white-space:nowrap}.door.CLOSED .st{color:var(--grn)}.door.OPEN .st,.door.MOVING .st{color:var(--bad)}
+.setup p{line-height:1.5;max-width:62ch}
+.setup input{width:100%;padding:10px;border-radius:8px;border:1px solid #3a404c;background:var(--well);color:var(--yel);font:inherit}
+code{background:var(--well);padding:1px 6px;border-radius:5px;color:var(--yel)}
+.foot{text-align:center;color:var(--mute);font-size:12px;padding:10px 12px 24px}
+.foot a{color:var(--blu)}
+@media (prefers-reduced-motion:reduce){.alarm,.dot.on{animation:none}}
+</style>
+</head>
+<body>
+<div class="top"><div class="flag"></div>
+<header><div class="num">2</div><div style="min-width:0"><h1>WolfTronix <span>Cars</span></h1>
+<div class="sub live"><i class="dot" id="dot"></i><span id="sub">starting...</span></div></div></header></div>
+
+<main id="app">
+<div id="banner"></div>
+<div id="setup" class="n plain setup" hidden>
+<h2>Open your private link</h2>
+<p>This page shows your cars from the garage CYD, from anywhere. It needs the private link with your key.
+On your home Wi-Fi open <code>http://cyd.local/cloud</code> (or Setup &rarr; Car website link), turn the car website on, and open the link shown there on this phone.</p>
+<p>Or paste the link here:</p>
+<p><input id="paste" placeholder="https://.../#k=...&amp;b=hivemq" autocomplete="off"></p>
+<p><button class="btn y" id="go">Open</button></p>
+</div>
+<div id="cars"></div>
+<div class="n plain" id="mapbox" hidden>
+<h2 id="maph">Map</h2>
+<div class="tabs" id="cartabs"></div>
+<div id="map"></div>
+<div class="sub" id="mapnote" style="margin-top:8px"></div>
+</div>
+<div class="n plain" id="tripbox" hidden>
+<h2 id="triph">Trips</h2>
+<div class="sum" id="tsum"></div>
+<div class="scroll"><table id="trips"></table></div>
+<div class="sub" style="margin-top:6px">Tap a trip to see it on the map. The newest trip shows its whole route; older ones show start and end.</div>
+</div>
+<div class="n plain" id="doorbox" hidden><h2>Garage doors</h2><div class="doors" id="doors"></div></div>
+<div class="n plain" id="logbox" hidden>
+<h2>Event log</h2>
+<div class="tabs" id="logtabs"></div>
+<div class="scroll" style="max-height:440px;overflow:auto"><table id="log"></table></div>
+</div>
+</main>
+<div class="flag"></div>
+<div class="foot">Data comes encrypted from your garage CYD. Only this link can read it. <a href="#" id="forget">Forget this link on this phone</a></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script>
+"use strict";
+var E = 946684800;   // the CYD counts seconds from 2000-01-01
+var BROKERS = {hivemq: "wss://broker.hivemq.com:8884/mqtt", emqx: "wss://broker.emqx.io:8084/mqtt"};
+var $ = function (i) { return document.getElementById(i); };
+var ST = null, ST_AT = 0, LOG = "", TRIPS = {}, CUR = null, LC = "", SEL = null, MAP = null, LAYER = null, CLIENT = null, KEYS = null;
+var EV = {shock: "knock", tilt: "tilt", drop: "12 V drop", engine: "engine", door: "door", light: "light", lowbat: "box battery",
+  hot: "hot", moved: "moved", crash: "crash", home: "home", away: "away", trip: "trip", new: "new", boot: "restart", scan: "scan"};
+
+function esc(x) { return String(x == null ? "" : x).replace(/[&<>"']/g, function (c) { return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]; }); }
+function ago(s) { if (s == null || isNaN(s)) return "never"; s = Math.max(0, s); return s < 90 ? Math.round(s) + " s" : s < 5400 ? Math.round(s / 60) + " min" : s < 172800 ? (s / 3600).toFixed(1) + " h" : Math.round(s / 86400) + " days"; }
+function d8(e) { return new Date((e + E) * 1000); }
+function tm(e) { var d = d8(e), t = new Date(); var hm = d.toLocaleTimeString([], {hour: "numeric", minute: "2-digit"});
+  return d.toDateString() == t.toDateString() ? hm : d.toLocaleDateString([], {month: "short", day: "numeric"}) + " " + hm; }
+function mi(m) { return m / 1609.34; }
+function mph(k) { return Math.round(k / 1.609); }
+function hm(s) { return s < 3600 ? Math.round(s / 60) + " min" : Math.floor(s / 3600) + " h " + Math.round(s % 3600 / 60) + " min"; }
+function pct12(v) { return Math.max(0, Math.min(100, Math.round((v - 11.6) / (12.7 - 11.6) * 100))); }
+function pctLi(v) { return Math.max(0, Math.min(100, Math.round((v - 3.3) / 0.9 * 100))); }
+function nowCyd() { return ST ? ST.now + (Date.now() - ST_AT) / 1000 : Date.now() / 1000 - E; }
+function store(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
+function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+
+// ---------- key from the link: #k=<base64url 32 bytes>&b=hivemq ----------
+function parse(h) {
+  var q = {}; (h || "").replace(/^.*#/, "").split("&").forEach(function (kv) { var p = kv.split("="); if (p[0]) q[p[0]] = decodeURIComponent(p.slice(1).join("=")); });
+  return q.k ? q : null;
+}
+function b64u(s) { s = s.replace(/-/g, "+").replace(/_/g, "/"); while (s.length % 4) s += "="; var b = atob(s), a = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+function cat(a, b) { var o = new Uint8Array(a.length + b.length); o.set(a); o.set(b, a.length); return o; }
+function hex(a) { return Array.prototype.map.call(a, function (x) { return ("0" + x.toString(16)).slice(-2); }).join(""); }
+function sha(a) { return crypto.subtle.digest("SHA-256", a).then(function (r) { return new Uint8Array(r); }); }
+function txt(s) { return new TextEncoder().encode(s); }
+
+function derive(k) {
+  return Promise.all([sha(cat(k, txt("enc"))), sha(cat(k, txt("mac"))), sha(cat(k, txt("topic")))]).then(function (r) {
+    return Promise.all([
+      crypto.subtle.importKey("raw", r[0], {name: "AES-CBC"}, false, ["decrypt"]),
+      crypto.subtle.importKey("raw", r[1], {name: "HMAC", hash: "SHA-256"}, false, ["sign"]),
+      "wtx1/" + hex(r[2].slice(0, 12))]);
+  }).then(function (r) { return {aes: r[0], mac: r[1], topic: r[2]}; });
+}
+
+function open(buf) {
+  var a = new Uint8Array(buf);
+  if (a.length < 50 || a[0] != 87 || a[1] != 49) return Promise.reject("not ours");
+  var iv = a.slice(2, 18), ct = a.slice(18, a.length - 16), tag = a.slice(a.length - 16);
+  return crypto.subtle.sign("HMAC", KEYS.mac, a.slice(0, a.length - 16)).then(function (m) {
+    m = new Uint8Array(m); var diff = 0; for (var i = 0; i < 16; i++) diff |= m[i] ^ tag[i];
+    if (diff) throw "wrong key";
+    return crypto.subtle.decrypt({name: "AES-CBC", iv: iv}, KEYS.aes, ct);
+  }).then(function (pt) { return JSON.parse(new TextDecoder().decode(pt)); });
+}
+
+// ---------- connection ----------
+var lastMsg = 0, connState = "wait";
+function sub() {
+  var el = $("sub"), dot = $("dot");
+  if (!KEYS) { el.textContent = "no link yet"; dot.className = "dot"; return; }
+  var t;
+  if (connState == "off") t = "no internet connection, retrying...";
+  else if (!ST) t = connState == "on" ? "connected, waiting for the garage..." : "connecting...";
+  else {
+    var age = Math.max(0, Date.now() / 1000 - E - ST.now);
+    t = "garage update " + ago(age) + " ago";
+    if (ST.every && age > ST.every * 3 + 120) t += " (garage CYD offline?)";
+  }
+  el.textContent = t;
+  dot.className = "dot " + (connState == "on" && ST && Date.now() / 1000 - E - ST.now < (ST.every || 300) * 3 + 120 ? "on" : connState == "off" ? "off" : "wait");
+}
+
+function connect(q) {
+  var url = BROKERS[q.b || "hivemq"] || (/^wss?:\/\//.test(q.b) ? q.b : BROKERS.hivemq);
+  derive(b64u(q.k)).then(function (k) {
+    KEYS = k;
+    if (CLIENT) try { CLIENT.end(true); } catch (e) {}
+    CLIENT = mqtt.connect(url, {clientId: "wtxweb-" + Math.random().toString(16).slice(2, 10), clean: true, reconnectPeriod: 5000, connectTimeout: 15000, keepalive: 60});
+    CLIENT.on("connect", function () { connState = "on"; sub(); CLIENT.subscribe(KEYS.topic + "/#"); });
+    CLIENT.on("reconnect", function () { connState = "wait"; sub(); });
+    CLIENT.on("offline", function () { connState = "off"; sub(); });
+    CLIENT.on("error", function () { connState = "off"; sub(); });
+    CLIENT.on("message", function (topic, payload) {
+      if (!payload || !payload.length) return;
+      var part = topic.slice(KEYS.topic.length + 1);
+      open(payload).then(function (m) {
+        if (part == "s") { ST = m; ST_AT = Date.now(); }
+        else if (part == "l") LOG = m.log || "";
+        else if (part.slice(0, 2) == "t/") TRIPS[m.id] = m;
+        draw();
+      }).catch(function (e) { if (e == "wrong key") { $("sub").textContent = "this link's key doesn't match the garage (new key made?)"; } });
+    });
+    sub();
+  }).catch(function () { $("sub").textContent = "this link is damaged, open it again from the CYD"; });
+}
+
+// ---------- drawing ----------
+function carState(c) {
+  if (ST && ST.car_alarm && ST.car_alarm.indexOf(c.name) >= 0) return ["ALARM", "ALARM"];
+  if (!c.home) return ["AWAY", "AWAY"];
+  if (c.d && c.d.run) return ["RUN", "ENGINE ON"];
+  return ["PARKED", "PARKED"];
+}
+function chip(html, bad) { return '<span class="c' + (bad ? " bad" : "") + '">' + html + "</span>"; }
+
+function drawCars() {
+  var ids = Object.keys(ST.cars).sort(function (a, b) { var x = ST.cars[a], y = ST.cars[b]; return (x.d && x.d.tn ? 1 : 0) - (y.d && y.d.tn ? 1 : 0) || (y.home ? 1 : 0) - (x.home ? 1 : 0) || x.name.localeCompare(y.name); });
+  var now = nowCyd(), out = [];
+  if (!ids.length) out.push('<div class="n plain">No car has reported to the garage yet.</div>');
+  ids.forEach(function (id) {
+    var c = ST.cars[id], d = c.d || {}, s = carState(c), ch = [], seen = c.t ? now - c.t : null;
+    var where = c.home ? (d.run ? "<b>at home</b>, engine running" : "<b>at home</b> in range of the garage") :
+      "<b>away</b> &middot; left range " + (seen != null ? ago(seen) + " ago" : "");
+    if (c.home) where += " &middot; reported " + ago(seen) + " ago";
+    if (d.v != null) ch.push(chip("12 V <b>" + d.v.toFixed(2) + "</b>" + (d.run ? " charging" : " &middot; " + pct12(d.v) + "%"), !d.run && d.v < c.low_v));
+    if (d.bat != null) ch.push(chip("box <b>" + d.bat.toFixed(2) + "</b> V" + (d.usb ? " charging" : " &middot; " + pctLi(d.bat) + "%"), d.bat < c.low_bat));
+    if (d.door != null) ch.push(chip((d.tn ? "trunk " : "door ") + (d.door ? "<b>OPEN</b>" : "closed"), !!d.door));
+    if (d.temp_c != null) ch.push(chip("<b>" + d.temp_c + "</b> &deg;C" + (d.temp_c != null ? " / " + Math.round(d.temp_c * 9 / 5 + 32) + " &deg;F" : ""), d.temp_c >= c.hot_c));
+    if (d.cab != null) ch.push(chip("cabin <b>" + d.cab + "</b> &deg;C"));
+    if (d.hum != null) ch.push(chip("<b>" + d.hum + "</b> % hum"));
+    if (d.rad) ch.push(chip("radar <b>" + (d.rad[0] ? "person " + (d.rad[1] / 100).toFixed(1) + " m" : "nobody") + "</b>", !!d.rad[0]));
+    if (d.gp) ch.push(chip('MOVED, now at <a style="color:#5cc8ff" target="_blank" rel="noopener" href="https://www.openstreetmap.org/?mlat=' + (+d.gp[0]) + "&mlon=" + (+d.gp[1]) + "#map=17/" + (+d.gp[0]) + "/" + (+d.gp[1]) + '">' + (+d.gp[0]).toFixed(5) + ", " + (+d.gp[1]).toFixed(5) + "</a>", true));
+    if (c.home) ch.push(chip(c.via ? "via Garage Side" : c.rssi != null ? "signal <b>" + c.rssi + "</b> dBm" : "signal ?"));
+    if (c.ver) ch.push(chip("v" + esc(c.ver)));
+    out.push('<div class="n car ' + s[0] + '"><div class="b">' + esc(c.name) + ' <span class="badge">' + s[1] + "</span></div>" +
+      '<div class="where">' + where + "</div>" +
+      (d.v != null && !d.run ? '<div class="g"><i style="width:' + pct12(d.v) + "%;background:" + (pct12(d.v) < 30 ? "var(--red)" : pct12(d.v) < 55 ? "var(--yel)" : "var(--grn)") + '"></i></div>' : "") +
+      '<div class="chips">' + ch.join("") + "</div></div>");
+  });
+  $("cars").innerHTML = out.join("");
+  if (!CUR || !ST.cars[CUR]) {   // start on a car that has trips, else the first car at home
+    var cand = ids.filter(function (i) { return !(ST.cars[i].d || {}).tn; });
+    CUR = cand.filter(function (i) { return ST.cars[i].trip_t; })[0] || cand.filter(function (i) { return ST.cars[i].home; })[0] || cand[0] || ids[0] || null;
+  }
+  $("cartabs").innerHTML = ids.filter(function (i) { return !(ST.cars[i].d || {}).tn; }).map(function (i) {
+    return '<button data-car="' + esc(i) + '" class="' + (i == CUR ? "on" : "") + '">' + esc(ST.cars[i].name) + "</button>"; }).join("");
+}
+
+function banner() {
+  var h = "";
+  if (ST.alarm) h += '<div class="alarm" role="alert">&#9873; ' + esc(ST.alarm) + "</div>";
+  if (ST.warn) h += '<div class="warn">' + esc(ST.warn) + "</div>";
+  h += '<div class="row sub" style="margin:10px 2px 0">Car alarm ' + (ST.armed ? '<b style="color:var(--grn)">ARMED</b>' : "<b>not armed</b>") +
+    " (" + ({night: "at night", always: "always", off: "off"}[ST.arm] || esc(ST.arm)) + ")</div>";
+  $("banner").innerHTML = h;
+}
+
+function tripRows(id) {
+  var m = TRIPS[id]; if (!m) return [];
+  return (m.trips || []).map(function (l) { var p = l.split(","); return {t: +p[0], dur: +p[1], d: +p[2], mx: +p[3], mv: +p[4], v0: parseFloat(p[5]), v1: parseFloat(p[6]),
+    a: [+p[7], +p[8]], b: [+p[9], +p[10]]}; }).filter(function (x) { return x.t > 0; }).sort(function (a, b) { return b.t - a.t; });
+}
+function day0(e) { var d = d8(e); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
+function tsum(L, label) {
+  var d = 0, mv = 0, mx = 0; L.forEach(function (x) { d += x.d; mv += x.mv; mx = Math.max(mx, x.mx); });
+  return '<span class="k">' + label + "<b>" + mi(d).toFixed(1) + " mi</b>" + L.length + " trip" + (L.length == 1 ? "" : "s") + (L.length ? " &middot; top " + mph(mx) + " mph" : "") + "</span>";
+}
+function drawTrips() {
+  var c = CUR && ST.cars[CUR], T = CUR ? tripRows(CUR) : [];
+  $("tripbox").hidden = !c;
+  if (!c) return;
+  $("triph").textContent = "Trips: " + c.name;
+  if (!T.length) { $("tsum").innerHTML = ""; $("trips").innerHTML = '<tr><td class="sub" style="white-space:normal">No trips sent yet. The car hands its trips to the garage when it gets home (needs its GPS module).</td></tr>'; return; }
+  var today = day0(nowCyd());
+  $("tsum").innerHTML = tsum(T.filter(function (x) { return day0(x.t) == today; }), "Today") +
+    tsum(T.filter(function (x) { return day0(x.t) > today - 7 * 864e5; }), "7 days") + tsum(T, "Last " + T.length);
+  $("trips").innerHTML = "<tr><th>Start</th><th>Miles</th><th>Time</th><th>Avg</th><th>Top</th></tr>" + T.map(function (x) {
+    return '<tr data-t="' + x.t + '" class="' + (SEL == x.t ? "on" : "") + '"><td>' + tm(x.t) + "</td><td>" + mi(x.d).toFixed(1) + "</td><td>" + hm(x.dur) +
+      "</td><td>" + (x.mv ? Math.round(mi(x.d) / (x.mv / 3600)) : 0) + " mph</td><td>" + mph(x.mx) + " mph</td></tr>"; }).join("");
+}
+
+function scol(f) { return f < .3 ? "#3a7bd5" : f < .55 ? "#19c37d" : f < .75 ? "#ffd400" : f < .9 ? "#ff8c1a" : "#e10600"; }
+function drawMap() {
+  var c = CUR && ST.cars[CUR];
+  $("mapbox").hidden = !c;
+  if (!c) return;
+  $("maph").textContent = "Map: " + c.name;
+  if (!window.L) { $("map").innerHTML = '<div class="sub" style="padding:12px">The map could not load.</div>'; return; }
+  if (!MAP) {
+    MAP = L.map("map", {zoomControl: true, attributionControl: true});
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 19, attribution: "&copy; OpenStreetMap"}).addTo(MAP);
+    MAP.setView([39.5, -98.35], 3);
+  }
+  if (LAYER) LAYER.remove();
+  LAYER = L.layerGroup().addTo(MAP);
+  var T = tripRows(CUR), m = TRIPS[CUR], pts = [], note = [], d = c.d || {};
+  var trip = SEL ? T.filter(function (x) { return x.t == SEL; })[0] : T[0];
+  function dot(ll, col, text) { L.circleMarker(ll, {radius: 8, color: "#000", weight: 2, fillColor: col, fillOpacity: 1}).addTo(LAYER).bindPopup(text); pts.push(ll); }
+  if (trip) {
+    var trk = m && m.trk_t == trip.t ? m.trk : [];
+    if (trk.length > 1) {
+      var top = 1; trk.forEach(function (p) { top = Math.max(top, p[3]); });
+      for (var i = 1; i < trk.length; i++) {
+        var a = trk[i - 1], b = trk[i];
+        L.polyline([[a[1], a[2]], [b[1], b[2]]], {color: scol(b[3] / top), weight: 5, opacity: .9}).addTo(LAYER);
+        pts.push([b[1], b[2]]);
+      }
+      note.push("Route of the trip on " + tm(trip.t) + ", coloured by speed (blue slow, red fast). " + trk.length + " points.");
+    } else note.push("Trip on " + tm(trip.t) + ": start and end only (the full route is sent for the newest trip).");
+    if (trip.a[0]) dot(trip.a, "#19c37d", "start " + tm(trip.t));
+    if (trip.b[0]) dot(trip.b, "#e10600", "end " + tm(trip.t + trip.dur) + "<br>" + mi(trip.d).toFixed(1) + " mi, top " + mph(trip.mx) + " mph");
+  }
+  if (d.gp) { dot([+d.gp[0], +d.gp[1]], "#ff00ff", "MOVED while parked: now here"); note.push("Pink: where the car is now (it moved while parked)."); }
+  if (!c.home && T[0] && T[0].b[0] && !d.gp) note.push(c.name + " is away. Last place the garage knows: the end of its newest trip.");
+  if (!T.length && !d.gp) note.push("No position yet. Positions come with trips (GPS module) or a MOVED alarm.");
+  $("mapnote").textContent = note.join(" ");
+  setTimeout(function () { MAP.invalidateSize(); if (pts.length) MAP.fitBounds(L.latLngBounds(pts).pad(.15), {maxZoom: 16}); }, 30);
+}
+
+function drawDoors() {
+  var ks = Object.keys(ST.doors || {});
+  $("doorbox").hidden = !ks.length;
+  $("doors").innerHTML = ks.sort().map(function (k) {
+    var d = ST.doors[k], st = !d.online ? "OFFLINE" : (d.door || "?");
+    return '<div class="door ' + esc(st) + '"><b>' + esc(d.name) + '</b><span class="st">' + esc(st) + "</span>" +
+      (d.temp_c != null && d.online ? ' &middot; <span>' + d.temp_c + " &deg;C</span>" : "") + (d.hum != null && d.online ? " &middot; <span>" + d.hum + " %</span>" : "") +
+      (d.vbat ? '<div class="sub">battery ' + d.vbat + " V</div>" : "") + "</div>"; }).join("");
+}
+
+function drawLog() {
+  var rows = LOG.trim().split("\n").filter(Boolean).map(function (l) { return l.split("|"); }).filter(function (r) { return r.length >= 4 && (!LC || r[1] == LC); }).reverse();
+  $("logbox").hidden = !LOG;
+  var ids = Object.keys(ST.cars);
+  $("logtabs").innerHTML = '<button data-log="" class="' + (LC ? "" : "on") + '">all</button>' + ids.map(function (i) {
+    return '<button data-log="' + esc(i) + '" class="' + (LC == i ? "on" : "") + '">' + esc(ST.cars[i].name) + "</button>"; }).join("");
+  $("log").innerHTML = rows.length ? rows.map(function (r) {
+    var bad = r[2].slice(-1) == "!", nm = ST.cars[r[1]] ? ST.cars[r[1]].name : r[1];
+    return "<tr><td>" + tm(+r[0]) + "</td><td>" + esc(nm) + '</td><td class="' + (bad ? "bad" : "") + '">' + (bad ? "ALARM: " : "") + esc(r.slice(3).join("|")) + "</td></tr>"; }).join("")
+    : '<tr><td class="sub">nothing logged</td></tr>';
+}
+
+var mapKey = "";
+function draw() {
+  sub();
+  if (!ST) return;
+  banner(); drawCars(); drawTrips(); drawDoors(); drawLog();
+  var mk = CUR + "|" + SEL + "|" + JSON.stringify((ST.cars[CUR] || {}).d && ST.cars[CUR].d.gp) + "|" + (TRIPS[CUR] ? TRIPS[CUR].trk_t + ":" + TRIPS[CUR].trips.length : "");
+  if (mk != mapKey) { mapKey = mk; drawMap(); }
+}
+
+document.addEventListener("click", function (e) {
+  var b = e.target.closest("[data-car]"); if (b) { CUR = b.getAttribute("data-car"); SEL = null; draw(); return; }
+  b = e.target.closest("[data-log]"); if (b) { LC = b.getAttribute("data-log"); drawLog(); return; }
+  b = e.target.closest("#trips tr[data-t]"); if (b) { SEL = +b.getAttribute("data-t"); draw(); $("mapbox").scrollIntoView({behavior: "smooth", block: "start"}); }
+});
+$("go").onclick = function () { var q = parse($("paste").value.trim()); if (q) { location.hash = "k=" + q.k + "&b=" + (q.b || "hivemq"); start(); } else $("paste").focus(); };
+$("forget").onclick = function (e) { e.preventDefault(); store("wtx_link", null); if (CLIENT) CLIENT.end(true); location.hash = ""; location.reload(); };
+window.addEventListener("hashchange", start);
+setInterval(sub, 10000);
+
+function start() {
+  var q = parse(location.hash) || parse(load("wtx_link") || "");
+  if (!q) { $("setup").hidden = false; sub(); return; }
+  $("setup").hidden = true;
+  store("wtx_link", "#k=" + q.k + "&b=" + (q.b || "hivemq"));   // the home-screen icon may open without the # part
+  if (!window.crypto || !crypto.subtle) { $("sub").textContent = "this browser can't decrypt (open the page over https)"; return; }
+  if (!window.mqtt) { $("sub").textContent = "could not load the connection library, check the internet"; return; }
+  connect(q);
+}
+start();
+</script>
+</body>
+</html>
