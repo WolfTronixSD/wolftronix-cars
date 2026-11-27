@@ -56,11 +56,24 @@ a{color:var(--warn)}
   <button class="sec" data-c="auto">Auto baud</button>
   <button class="sec" data-c="reset">GPS factory reset</button>
 </div>
+<div class="t wide" id="fwbox" style="margin-bottom:12px">
+  <span>Firmware update (car node main.py)</span>
+  <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+    <input type="file" id="fwfile" accept=".py,text/plain" style="color:var(--tx)">
+    <input type="password" id="fwpin" placeholder="PIN (the first update sets it)" inputmode="numeric" autocomplete="off"
+      style="font:inherit;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--tx)">
+    <button id="fwgo">Install over Bluetooth</button>
+    <div style="height:10px;background:var(--line);border-radius:5px;overflow:hidden"><div id="fwbar" style="height:100%;width:0;background:var(--ok)"></div></div>
+    <div id="fwst" style="font-size:14px;color:var(--mut)">Download main.py from GitHub (car_node/main.py), pick it here, enter the PIN, tap Install. About a minute. The box restarts with it and goes back to the old one if it crashes.</div>
+  </div>
+</div>
 <div id="help">The GPS LED blinking once a second means the module has a fix. If this page then shows 0 bytes/s, the wire from GPS TX to the box is the problem.</div>
 <script>
 const SVC="7a5e0001-3c1d-4b8e-9f2a-0c4b5d6e7f80",DATA="7a5e0002-3c1d-4b8e-9f2a-0c4b5d6e7f80",CMD="7a5e0003-3c1d-4b8e-9f2a-0c4b5d6e7f80";
 const $=id=>document.getElementById(id);
-let dev=null,chD=null,chC=null,busy=false,last=null,timer=null,lastT=0;
+let dev=null,chD=null,chC=null,chF=null,busy=false,last=null,timer=null,lastT=0,lastP=null,fwRun=false,sending=false;
+const FW="7a5e0004-3c1d-4b8e-9f2a-0c4b5d6e7f80";
+try{$("fwpin").value=localStorage.getItem("carbox_pin")||""}catch(e){}
 function st(t){$("st").textContent=t}
 function diag(txt,sub,col){const d=$("diag");d.innerHTML="";d.append(txt);if(sub){const s=document.createElement("small");s.textContent=sub;d.append(s)}d.style.borderLeftColor=col}
 function hms(s){s=s|0;return s<60?s+" s":s<3600?Math.floor(s/60)+" min":Math.floor(s/3600)+" h "+Math.floor(s%3600/60)+" min"}
@@ -77,6 +90,7 @@ async function open(){
   const srv=await dev.gatt.connect();
   const s=await srv.getPrimaryService(SVC);
   chD=await s.getCharacteristic(DATA);chC=await s.getCharacteristic(CMD);
+  try{chF=await s.getCharacteristic(FW)}catch(e){chF=null}
   try{await chD.startNotifications();chD.addEventListener("characteristicvaluechanged",read)}catch(e){}
   $("conn").textContent="Connected: "+dev.name;st("Connected. Data about once a second.");
   clearInterval(timer);timer=setInterval(()=>{if(Date.now()-lastT>1800)read()},1500);read();
@@ -87,12 +101,12 @@ async function lost(){
   st("Lost. Tap Reconnect (the box stops Bluetooth when the car is parked).");
 }
 async function read(){
-  if(busy||!chD)return;busy=true;
+  if(busy||sending||!chD)return;busy=true;
   try{const v=await chD.readValue();show(JSON.parse(new TextDecoder().decode(v)))}catch(e){}
   busy=false;
 }
 function show(p){
-  const now=Date.now();
+  const now=Date.now();lastP=p;
   let bps="-";if(last&&now>last.t){bps=Math.max(0,Math.round((p.by-last.by)*1000/(now-last.t)))}
   const okRate=last?p.ok-last.ok:0;
   last={t:now,by:p.by,ok:p.ok};lastT=now;
@@ -118,6 +132,40 @@ document.querySelectorAll("[data-c]").forEach(b=>b.onclick=async()=>{
   if(!chC){st("Connect first");return}
   try{await chC.writeValue(new TextEncoder().encode(b.dataset.c));st("Sent: "+b.dataset.c)}catch(e){st("Send failed: "+e.message)}
 });
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function fwst(t,col){$("fwst").textContent=t;$("fwst").style.color=col||"var(--mut)"}
+async function waitFw(want,ms){const t0=Date.now();while(Date.now()-t0<ms){await sleep(400);await read();if(lastP&&lastP.fw===want)return true;if(lastP&&lastP.fw&&lastP.fw!==want&&lastP.fw!=="rx")throw new Error(lastP.fw)}return false}
+$("fwgo").onclick=async()=>{
+  if(fwRun)return;
+  const file=$("fwfile").files[0],pin=$("fwpin").value.trim();
+  if(!chC||!dev.gatt.connected){fwst("Connect to the CarBox first","var(--bad)");return}
+  if(!chF){fwst("This box firmware has no Bluetooth update (needs 1.1.56+)","var(--bad)");return}
+  if(!file){fwst("Pick main.py first","var(--bad)");return}
+  if(pin.length<4){fwst("PIN: at least 4 characters","var(--bad)");return}
+  const buf=new Uint8Array(await file.arrayBuffer());
+  const txt=new TextDecoder().decode(buf.slice(0,4000));
+  const m=txt.match(/^VERSION = "([^"]+)"/m);
+  if(!m||!txt.includes("car alarm node")){fwst("That is not a car node main.py","var(--bad)");return}
+  if(!confirm("Install car node "+m[1]+" (running: "+(lastP?lastP.v:"?")+")? The box restarts."))return;
+  try{localStorage.setItem("carbox_pin",pin)}catch(e){}
+  fwRun=true;$("fwgo").disabled=true;
+  try{
+    const hash=[...new Uint8Array(await crypto.subtle.digest("SHA-256",buf))].map(b=>b.toString(16).padStart(2,"0")).join("");
+    fwst("Starting ...");
+    await chC.writeValue(new TextEncoder().encode("fw "+buf.length+" "+hash+" "+pin));
+    if(!await waitFw("rx",6000))throw new Error("the box did not answer");
+    const CH=244,t0=Date.now();sending=true;
+    for(let o=0;o<buf.length;o+=CH){
+      await chF.writeValueWithResponse(buf.slice(o,o+CH));
+      if((o/CH)%10===0){const pc=Math.round(o*100/buf.length);$("fwbar").style.width=pc+"%";fwst("Sending "+pc+"% ("+Math.round(o/1024)+" of "+Math.round(buf.length/1024)+" KB)")}
+    }
+    sending=false;$("fwbar").style.width="100%";fwst("Checking on the box ...");
+    await chC.writeValue(new TextEncoder().encode("fwend"));
+    if(!await waitFw("ok",8000))throw new Error("no answer after sending");
+    fwst("Installed "+m[1]+" in "+Math.round((Date.now()-t0)/1000)+" s. The box restarts; reconnect in about 20 s.","var(--ok)");
+  }catch(e){fwst("Update failed: "+e.message+". The box keeps its old firmware.","var(--bad)");$("fwbar").style.width="0"}
+  sending=false;fwRun=false;$("fwgo").disabled=false;
+};
 </script>
 </body>
 </html>
