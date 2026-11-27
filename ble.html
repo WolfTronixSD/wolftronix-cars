@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#14161b">
+<meta name="robots" content="noindex">
+<title>CarBox Live</title>
+<style>
+/* CarBox live data over Bluetooth (car node 1.1.56+). Chrome on Android, Bluefy on iPhone. */
+:root{--bg:#14161b;--card:#1d2027;--line:#2c3039;--tx:#eef0f4;--mut:#8b919c;--ok:#3ccf6a;--warn:#ffc300;--bad:#ff4b3e}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.35 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:16px;padding-top:max(16px,env(safe-area-inset-top))}
+h1{font-size:20px;margin:0 0 12px;font-style:italic;letter-spacing:.5px}
+h1 b{color:var(--bad)}
+button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:12px 16px;background:var(--bad);color:#fff}
+button.sec{background:var(--line);color:var(--tx);padding:10px 12px;font-size:14px}
+#conn{width:100%;font-size:18px;margin-bottom:12px}
+#st{color:var(--mut);font-size:14px;margin:-4px 0 12px}
+#diag{border-radius:12px;padding:14px;font-weight:700;font-size:18px;margin-bottom:12px;background:var(--card);border-left:6px solid var(--mut)}
+#diag small{display:block;font-weight:400;font-size:14px;color:var(--mut);margin-top:4px}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}
+.t{background:var(--card);border-radius:12px;padding:10px 12px;min-width:0}
+.t span{display:block;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.6px}
+.t b{display:block;font-size:24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wide{grid-column:1/-1}
+#ln{font:13px/1.3 ui-monospace,Menlo,Consolas,monospace;word-break:break-all;white-space:normal;font-weight:400}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+a{color:var(--warn)}
+#help{color:var(--mut);font-size:14px}
+</style>
+</head>
+<body>
+<h1>Car<b>Box</b> live</h1>
+<button id="conn">Connect to CarBox</button>
+<div id="st">Bluetooth: Chrome on Android, or the Bluefy app on iPhone. Only while the car runs.</div>
+<div id="diag">Not connected</div>
+<div class="grid">
+  <div class="t"><span>Satellites</span><b id="sat">-</b></div>
+  <div class="t"><span>In view</span><b id="nv">-</b></div>
+  <div class="t"><span>Speed</span><b id="spd">-</b></div>
+  <div class="t"><span>Fix</span><b id="fx">-</b></div>
+  <div class="t"><span>GPS bytes/s</span><b id="bps">-</b></div>
+  <div class="t"><span>Good lines</span><b id="ok">-</b></div>
+  <div class="t"><span>Box battery</span><b id="b">-</b></div>
+  <div class="t"><span>Car 12 V</span><b id="v12">-</b></div>
+  <div class="t"><span>Trip</span><b id="d">-</b></div>
+  <div class="t"><span>Awake</span><b id="up">-</b></div>
+  <div class="t wide"><span>Position</span><b id="pos">-</b></div>
+  <div class="t wide"><span>Last GPS line</span><b id="ln">-</b></div>
+  <div class="t wide"><span>GPS port</span><b id="port" style="font-size:15px;white-space:normal">-</b></div>
+</div>
+<div class="row">
+  <button class="sec" data-c="baud 9600">9600 baud</button>
+  <button class="sec" data-c="baud 115200">115200 baud</button>
+  <button class="sec" data-c="auto">Auto baud</button>
+  <button class="sec" data-c="pcas 10,0">GPS hot restart</button>
+</div>
+<div id="help">The GPS LED blinking once a second means the module has a fix. If this page then shows 0 bytes/s, the wire from GPS TX to the box is the problem.</div>
+<script>
+const SVC="7a5e0001-3c1d-4b8e-9f2a-0c4b5d6e7f80",DATA="7a5e0002-3c1d-4b8e-9f2a-0c4b5d6e7f80",CMD="7a5e0003-3c1d-4b8e-9f2a-0c4b5d6e7f80";
+const $=id=>document.getElementById(id);
+let dev=null,chD=null,chC=null,busy=false,last=null,timer=null,lastT=0;
+function st(t){$("st").textContent=t}
+function diag(txt,sub,col){const d=$("diag");d.innerHTML="";d.append(txt);if(sub){const s=document.createElement("small");s.textContent=sub;d.append(s)}d.style.borderLeftColor=col}
+function hms(s){s=s|0;return s<60?s+" s":s<3600?Math.floor(s/60)+" min":Math.floor(s/3600)+" h "+Math.floor(s%3600/60)+" min"}
+async function connect(){
+  if(!navigator.bluetooth){st("This browser has no Bluetooth. Use Chrome on Android or the Bluefy app on iPhone.");return}
+  try{
+    dev=await navigator.bluetooth.requestDevice({filters:[{namePrefix:"CarBox"}],optionalServices:[SVC]});
+    dev.addEventListener("gattserverdisconnected",lost);
+    await open();
+  }catch(e){st("Not connected: "+e.message)}
+}
+async function open(){
+  st("Connecting to "+dev.name+" ...");
+  const srv=await dev.gatt.connect();
+  const s=await srv.getPrimaryService(SVC);
+  chD=await s.getCharacteristic(DATA);chC=await s.getCharacteristic(CMD);
+  try{await chD.startNotifications();chD.addEventListener("characteristicvaluechanged",read)}catch(e){}
+  $("conn").textContent="Connected: "+dev.name;st("Connected. Data about once a second.");
+  clearInterval(timer);timer=setInterval(()=>{if(Date.now()-lastT>1800)read()},1500);read();
+}
+async function lost(){
+  clearInterval(timer);$("conn").textContent="Reconnect";diag("Connection lost","Reconnecting ...","var(--warn)");
+  for(let i=0;i<5&&dev;i++){try{await new Promise(r=>setTimeout(r,2000));await open();return}catch(e){}}
+  st("Lost. Tap Reconnect (the box stops Bluetooth when the car is parked).");
+}
+async function read(){
+  if(busy||!chD)return;busy=true;
+  try{const v=await chD.readValue();show(JSON.parse(new TextDecoder().decode(v)))}catch(e){}
+  busy=false;
+}
+function show(p){
+  const now=Date.now();
+  let bps="-";if(last&&now>last.t){bps=Math.max(0,Math.round((p.by-last.by)*1000/(now-last.t)))}
+  const okRate=last?p.ok-last.ok:0;
+  last={t:now,by:p.by,ok:p.ok};lastT=now;
+  $("sat").textContent=p.sat??"-";$("nv").textContent=p.nv||"-";
+  $("spd").textContent=p.s!=null?Math.round(p.s/1.609)+" mph":"-";
+  $("fx").textContent={3:"3D",2:"2D"}[p.fx]||"none";
+  $("bps").textContent=bps;$("ok").textContent=p.ok;
+  $("b").textContent=p.b!=null?p.b.toFixed(2)+" V":"-";
+  $("v12").textContent=p.v12!=null?p.v12.toFixed(2)+" V":"-";
+  $("d").textContent=(p.d/1609).toFixed(1)+" mi";$("up").textContent=hms(p.up);
+  const pos=$("pos");pos.textContent="-";
+  if(p.la!=null){const a=document.createElement("a");a.href="https://maps.google.com/?q="+p.la+","+p.lo;a.target="_blank";a.textContent=p.la+", "+p.lo;pos.textContent="";pos.append(a)}
+  $("ln").textContent=p.ln||"(nothing yet)";
+  $("port").textContent="RX GPIO "+p.rx+", TX GPIO "+p.tx+", "+p.baud+" baud · firmware "+p.v;
+  if(!p.on)diag(p.low?"GPS off: box battery low":"GPS off",p.low?"It comes back when the box LiPo charges above 3.5 V.":"","var(--bad)");
+  else if(p.by===0||bps===0)diag("No data from the GPS","GPS powered, but nothing arrives on GPIO "+p.rx+". Check the GPS TX wire and its 1k.","var(--bad)");
+  else if(!p.ok||(bps>0&&okRate===0&&p.sat==null))diag("Junk from the GPS","Bytes arrive but no NMEA lines: wrong baud. The box tries other speeds every 8 s.","var(--warn)");
+  else if(!(p.fx>=2)&&p.sat==null)diag("GPS data OK, no fix yet",(p.nv||0)+" satellites in view. Needs open sky.","var(--warn)");
+  else diag("GPS fix: "+(p.sat??"?")+" satellites","HDOP "+(p.hp??"-")+", altitude "+(p.al??"-")+" m","var(--ok)");
+}
+$("conn").onclick=()=>{if(dev&&dev.gatt.connected)return;dev&&dev.name?open().catch(connect):connect()};
+document.querySelectorAll("[data-c]").forEach(b=>b.onclick=async()=>{
+  if(!chC){st("Connect first");return}
+  try{await chC.writeValue(new TextEncoder().encode(b.dataset.c));st("Sent: "+b.dataset.c)}catch(e){st("Send failed: "+e.message)}
+});
+</script>
+</body>
+</html>
