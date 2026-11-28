@@ -74,7 +74,7 @@ a{color:var(--warn)}
 <button id="conn">Connect to CarBox</button>
 <div id="st">Bluetooth: Chrome on Android, or the Bluefy app on iPhone. Only while the car runs.</div>
 <div class="tabs" role="tablist">
-  <button data-tab="drive" class="on">Drive</button><button data-tab="today">Today</button><button data-tab="gps">GPS</button><button data-tab="update">Update</button>
+  <button data-tab="drive" class="on">Drive</button><button data-tab="track">Track</button><button data-tab="today">Today</button><button data-tab="gps">GPS</button><button data-tab="update">Update</button>
 </div>
 <section class="pane" id="p_drive">
  <div id="drv">
@@ -110,6 +110,24 @@ a{color:var(--warn)}
  </div>
  <div id="help" style="margin-top:8px">0-60 and 1/4 mile start by themselves from a stop (under 2 mph). They come from GPS speed once a second, so they are estimates. HUD mirror flips the screen for a reflection in the windshield. Best times are kept on this phone.</div>
 </section>
+<section class="pane" id="p_track" hidden>
+ <div class="grid">
+  <div class="t wide" style="text-align:center"><span>Current lap</span><b id="lapCur" style="font-size:56px;font-style:italic">-</b></div>
+  <div class="t"><span>Last lap</span><b id="lapLast">-</b></div>
+  <div class="t"><span>Best lap</span><b id="lapBest">-</b></div>
+  <div class="t"><span>Laps</span><b id="lapN">0</b></div>
+  <div class="t"><span>60-0 braking</span><b id="b600">-</b></div>
+  <div class="t"><span>Best 60-0</span><b id="b600best">-</b></div>
+  <div class="t"><span>Peak lat / long g</span><b id="ggMax">-</b></div>
+ </div>
+ <div class="row"><button id="bLapSet">Set start/finish here</button><button class="sec" id="bLapClr">Clear laps</button></div>
+ <div id="lapMsg" class="hint" style="color:var(--mut);font-size:14px;margin-bottom:10px">Stand at your start/finish line and tap Set start/finish. A lap counts when you pass within 25 m of it again after being 80 m away.</div>
+ <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;align-items:start">
+  <canvas id="gg" width="300" height="300" style="width:100%;background:var(--card);border-radius:12px" aria-label="G-G diagram"></canvas>
+  <table class="tday"><thead><tr><th>Lap</th><th>Time</th><th>Gap</th></tr></thead><tbody id="lapRows"></tbody></table>
+ </div>
+ <div id="help" style="margin-top:8px">G-G trail: left/right = cornering, up = accelerating, down = braking, the last 90 seconds. 60-0 measures the stopping distance from 60 mph to a stop. All from GPS once a second, so they are estimates.</div>
+</section>
 <section class="pane" id="p_today" hidden>
  <div class="tday">
   <div class="grid">
@@ -120,11 +138,15 @@ a{color:var(--warn)}
    <div class="t"><span>This week</span><b id="wMi">-</b></div>
    <div class="t"><span>Best 0-60</span><b id="tBest">-</b></div>
   </div>
+  <button id="bShare">Make a share card</button>
+  <div id="shareOut"></div>
   <table><thead><tr><th>Start - end</th><th>Miles</th><th>Time</th><th>Avg / top</th></tr></thead><tbody id="tRows"></tbody></table>
   <div id="help">Trips seen by this phone (while connected). The full history of every drive, also without the phone, is on the Garage Cars page (cyd.local/cars, Trips).</div>
  </div>
 </section>
 <section class="pane" id="p_gps" hidden>
+<div style="display:flex;justify-content:center;margin-bottom:10px"><canvas id="sky" width="300" height="300" style="width:min(100%,340px);background:var(--card);border-radius:50%" aria-label="Satellite sky view"></canvas></div>
+<div id="help" style="text-align:center;margin-bottom:10px">Sky view: the middle is straight up, the edge is the horizon. Green = strong signal, yellow = fair, red = weak. Squares are BeiDou, circles GPS.</div>
 <div id="diag">Not connected</div>
 <div class="grid">
   <div class="t"><span>Satellites</span><b id="sat">-</b></div>
@@ -249,7 +271,7 @@ function show(p){
   if(p.la!=null){const a=document.createElement("a");a.href="https://maps.google.com/?q="+p.la+","+p.lo;a.target="_blank";a.textContent=p.la+", "+p.lo;pos.textContent="";pos.append(a)}
   $("ln").textContent=p.ln||"(nothing yet)";
   $("port").textContent="RX GPIO "+p.rx+", TX GPIO "+p.tx+", "+p.baud+" baud · firmware "+p.v;
-  try{driveUpdate(p);coolUpdate(p)}catch(e){console.error(e)}
+  try{driveUpdate(p);coolUpdate(p);trackUpdate(p)}catch(e){console.error(e)}
   if(!p.on)diag(p.low?"GPS off: box battery low":"GPS off",p.low?"It comes back when the box LiPo charges above 3.5 V.":"","var(--bad)");
   else if(p.by===0||bps===0)diag("No data from the GPS","GPS powered, but nothing arrives on GPIO "+p.rx+". Check the GPS TX wire and its 1k.","var(--bad)");
   else if(!p.ok||(bps>0&&okRate===0&&p.sat==null))diag("Junk from the GPS","Bytes arrive but no NMEA lines: wrong baud. The box tries other speeds every 8 s.","var(--warn)");
@@ -310,7 +332,7 @@ $("bReset").onclick=()=>{endTrip();D.top=0;D.t0=null;D.r060=null;D.rQm=null;rend
 $("alertV").onchange=()=>LS.set("cb_alert",+$("alertV").value||0);
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll(".tabs button").forEach(x=>x.classList.toggle("on",x===b));
-  ["drive","today","gps","update"].forEach(t=>{$("p_"+t).hidden=t!==b.dataset.tab});
+  ["drive","track","today","gps","update"].forEach(t=>{$("p_"+t).hidden=t!==b.dataset.tab});
   if(b.dataset.tab==="today")renderToday();
   if(!beepCtx){try{beepCtx=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}
   keepAwake()});
@@ -437,6 +459,75 @@ function coolRender(){const p=D.p||{},mph=p.s!=null?p.s/1.609:null;leds(mph);dra
 const _reset=$("bReset").onclick;$("bReset").onclick=()=>{_reset();X.route=[];X.hist=[];X.peakG=0;coolRender()};
 setInterval(()=>leds(D.p&&D.p.s!=null?D.p.s/1.609:null),250);
 coolRender();
+/* ---------- Track tab: lap timer, 60-0 braking, G-G trail; GPS tab: sky view; Today tab: share card ---------- */
+const Y={lap:null,laps:[],bestLap:LS.get("cb_blap",null),brake:null,r600:null,best600:LS.get("cb_b600",null),gg:[],ggMax:{lat:0,lon:0},prevHd:null,prevT:null,sv:[]};
+function mdist(a,b){const k=Math.cos(a[0]*Math.PI/180);const dy=(b[0]-a[0])*111320,dx=(b[1]-a[1])*111320*k;return Math.sqrt(dx*dx+dy*dy)}
+function fmtLap(s){if(s==null)return"-";const m=Math.floor(s/60);return m+":"+(s%60).toFixed(1).padStart(4,"0")}
+$("bLapSet").onclick=()=>{const p=D.p||{};if(p.la==null){$("lapMsg").textContent="Needs a GPS fix first";return}
+  Y.lap={line:[p.la,p.lo],start:null,away:false};Y.laps=[];$("lapMsg").textContent="Start/finish set here. The first lap starts when you leave and come back past it.";renderTrack()};
+$("bLapClr").onclick=()=>{Y.lap=null;Y.laps=[];$("lapMsg").textContent="Stand at your start/finish line and tap Set start/finish.";renderTrack()};
+function lapTick(p,mph){const L=Y.lap;if(!L||p.la==null)return;const now=Date.now(),d=mdist(L.line,[p.la,p.lo]);
+  if(d>80)L.away=true;
+  if(L.away&&d<25&&(mph||0)>5){if(L.start!=null){const t=(now-L.start)/1000;Y.laps.push(t);if(!Y.bestLap||t<Y.bestLap){Y.bestLap=t;LS.set("cb_blap",t)}
+      say("Lap "+Y.laps.length+", "+fmtLap(t).replace(":"," minutes ")+" seconds")}
+    else say("Lap timer started");L.start=now;L.away=false}}
+function brakeTick(mph){if(mph==null)return;const now=Date.now(),B=Y.brake;
+  if(mph>=60){Y.brake={armed:true,t0:null,dist:0,prevS:mph,prevT:now};return}
+  if(!B||!B.armed)return;const dt=(now-B.prevT)/1000;
+  if(B.t0==null){const f=(B.prevS-60)/Math.max(.01,B.prevS-mph);B.t0=B.prevT+f*(now-B.prevT);B.dist=((60+mph)/2)*0.44704*dt*(1-f)}
+  else B.dist+=((mph+B.prevS)/2)*0.44704*dt;
+  if(mph>B.prevS+1.5){Y.brake=null;return}                 // speeding up again: not a stop
+  if(mph<2){const t=(now-B.t0)/1000,r={t:t,m:B.dist};Y.r600=r;Y.brake=null;if(!Y.best600||r.m<Y.best600.m){Y.best600=r;LS.set("cb_b600",r)}
+    say("Sixty to zero in "+Math.round(r.m*3.281)+" feet");return}
+  B.prevS=mph;B.prevT=now}
+function ggTick(p,mph){const now=Date.now();if(mph==null)return;let lat=0;
+  if(D.hd!=null&&Y.prevHd!=null&&Y.prevT&&mph>5){let dh=D.hd-Y.prevHd;if(dh>180)dh-=360;if(dh<-180)dh+=360;const dt=(now-Y.prevT)/1000;if(dt>0&&dt<4)lat=(mph*0.44704)*(dh*Math.PI/180/dt)/9.81}
+  Y.prevHd=D.hd;Y.prevT=now;const lon=D.g||0;Y.gg.push([lat,lon]);if(Y.gg.length>90)Y.gg.shift();
+  Y.ggMax.lat=Math.max(Y.ggMax.lat,Math.abs(lat));Y.ggMax.lon=Math.max(Y.ggMax.lon,Math.abs(lon))}
+function drawGG(){const c=$("gg"),x=c.getContext("2d"),W=c.width,cx=W/2,cy=W/2,R=W/2-16,s=R/1.0;x.clearRect(0,0,W,W);
+  x.strokeStyle="rgba(255,255,255,.12)";x.lineWidth=1;[0.5,1].forEach(g=>{x.beginPath();x.arc(cx,cy,g*s,0,7);x.stroke()});
+  x.beginPath();x.moveTo(cx-R,cy);x.lineTo(cx+R,cy);x.moveTo(cx,cy-R);x.lineTo(cx,cy+R);x.stroke();
+  x.fillStyle="#9aa3b0";x.font="11px system-ui";x.textAlign="center";x.fillText("accel",cx,12);x.fillText("brake",cx,W-4);x.textAlign="left";x.fillText("0.5 g",cx+0.5*s+3,cy-3);x.fillText("1 g",cx+s-18,cy-3);
+  const n=Y.gg.length,th=window.__TH||["#00e1ff","#ffe600","#ff2a1f"];
+  Y.gg.forEach((q,i)=>{const px=cx+Math.max(-1.2,Math.min(1.2,q[0]))*s,py=cy-Math.max(-1.2,Math.min(1.2,q[1]))*s,last=i===n-1;
+    x.globalAlpha=last?1:.15+.6*i/n;x.fillStyle=last?th[2]:th[0];x.beginPath();x.arc(px,py,last?7:3,0,7);x.fill()});x.globalAlpha=1}
+function drawSky(){const c=$("sky");if(!c)return;const x=c.getContext("2d"),W=c.width,cx=W/2,cy=W/2,R=W/2-18;x.clearRect(0,0,W,W);
+  x.strokeStyle="rgba(255,255,255,.14)";x.lineWidth=1;[0,30,60].forEach(e=>{x.beginPath();x.arc(cx,cy,R*(90-e)/90,0,7);x.stroke()});
+  x.beginPath();x.moveTo(cx-R,cy);x.lineTo(cx+R,cy);x.moveTo(cx,cy-R);x.lineTo(cx,cy+R);x.stroke();
+  x.fillStyle="#9aa3b0";x.font="bold 12px system-ui";x.textAlign="center";x.textBaseline="middle";x.fillText("N",cx,8);x.fillText("S",cx,W-8);x.fillText("E",W-8,cy);x.fillText("W",8,cy);
+  if(!Y.sv.length){x.font="12px system-ui";x.fillText("satellites show here (car node 1.1.59+)",cx,cy+R*0.5);return}
+  Y.sv.forEach(q=>{const id=q[0],el=q[1],az=q[2],snr=q[3]||0,r=R*(90-Math.max(0,Math.min(90,el)))/90,t=(az-90)*Math.PI/180,px=cx+Math.cos(t)*r,py=cy+Math.sin(t)*r;
+    const col=snr>=30?"#3ccf6a":snr>=20?"#ffc300":snr>0?"#ff4b3e":"#666";x.fillStyle=col;x.shadowColor=col;x.shadowBlur=snr>=30?10:0;
+    if(id>=200&&id<300){x.fillRect(px-7,py-7,14,14)}else{x.beginPath();x.arc(px,py,7,0,7);x.fill()}x.shadowBlur=0;
+    x.fillStyle="#fff";x.font="10px system-ui";x.fillText(id>=200&&id<300?"B"+(id-200):id,px,py+15)})}
+function renderTrack(){const L=Y.lap;let cur="-";if(L&&L.start!=null)cur=fmtLap((Date.now()-L.start)/1000);
+  $("lapCur").textContent=cur;$("lapLast").textContent=fmtLap(Y.laps.length?Y.laps[Y.laps.length-1]:null);$("lapBest").textContent=fmtLap(Y.bestLap);$("lapN").textContent=Y.laps.length;
+  $("lapRows").innerHTML=Y.laps.map((t,i)=>"<tr><td>"+(i+1)+"</td><td>"+fmtLap(t)+"</td><td>"+(Y.laps.length>1?((t-Math.min(...Y.laps))>0?"+"+(t-Math.min(...Y.laps)).toFixed(1):"best"):"")+"</td></tr>").reverse().join("")||'<tr><td colspan="3" style="color:var(--mut)">No laps yet.</td></tr>';
+  const r=Y.r600,b=Y.best600;$("b600").textContent=r?Math.round(r.m*3.281)+" ft · "+r.t.toFixed(1)+" s":"-";$("b600best").textContent=b?Math.round(b.m*3.281)+" ft":"-";
+  $("ggMax").textContent=Y.ggMax.lat.toFixed(2)+" / "+Y.ggMax.lon.toFixed(2);drawGG()}
+function trackUpdate(p){const mph=p.s!=null?p.s/1.609:null;lapTick(p,mph);brakeTick(mph);ggTick(p,mph);if(p.sv)Y.sv=p.sv;renderTrack();drawSky()}
+setInterval(()=>{if(Y.lap&&Y.lap.start!=null)$("lapCur").textContent=fmtLap((Date.now()-Y.lap.start)/1000)},100);
+/* share card */
+$("bShare").onclick=async()=>{const c=document.createElement("canvas");c.width=1080;c.height=1350;const x=c.getContext("2d"),th=window.__TH||["#00e1ff","#ffe600","#ff2a1f"];
+  const g=x.createLinearGradient(0,0,0,1350);g.addColorStop(0,"#2a0d0d");g.addColorStop(.5,"#0b0c10");g.addColorStop(1,"#050608");x.fillStyle=g;x.fillRect(0,0,1080,1350);
+  x.fillStyle=th[2];x.fillRect(0,0,1080,14);x.textAlign="left";x.fillStyle="#fff";x.font="italic 900 76px system-ui";x.fillText("CarBox",70,140);x.fillStyle=th[2];x.fillText("live",370,140);
+  x.fillStyle="#9aa3b0";x.font="600 34px system-ui";x.fillText(new Date().toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"}),70,200);
+  const L=LS.get("cb_trips",[]),d0=new Date();d0.setHours(0,0,0,0);const T=L.filter(t=>t.s>=d0.getTime());const mi=T.reduce((a,t)=>a+t.mi,0)+(D.trip&&D.p?Math.max(0,((D.p.d||0)-D.d0)/1609):0);
+  const top=Math.max(D.top||0,...T.map(t=>t.top),0);
+  x.textAlign="center";x.fillStyle="#fff";x.font="italic 900 300px system-ui";x.shadowColor=th[2];x.shadowBlur=40;x.fillText(Math.round(cv(top)),540,520);x.shadowBlur=0;
+  x.fillStyle="#9aa3b0";x.font="italic 700 44px system-ui";x.fillText("TOP SPEED "+U().toUpperCase(),540,590);
+  const tiles=[["0-60",D.best060?D.best060.toFixed(1)+" s":"-"],["1/4 MILE",D.bestQm?D.bestQm.t.toFixed(1)+" s":"-"],["60-0",Y.best600?Math.round(Y.best600.m*3.281)+" ft":"-"],
+    ["TODAY",(KMH?mi*1.609:mi).toFixed(1)+(KMH?" km":" mi")],["BEST LAP",fmtLap(Y.bestLap)],["PEAK G",X.peakG?X.peakG.toFixed(2):"-"]];
+  tiles.forEach((t,i)=>{const cx=70+(i%3)*320,cy=650+Math.floor(i/3)*170;x.fillStyle="rgba(255,255,255,.06)";x.fillRect(cx,cy,300,150);
+    x.textAlign="left";x.fillStyle="#9aa3b0";x.font="600 28px system-ui";x.fillText(t[0],cx+22,cy+44);x.fillStyle="#fff";x.font="italic 800 58px system-ui";x.fillText(t[1],cx+22,cy+115)});
+  const r=X.route;if(r.length>1){let a=Infinity,b=-Infinity,c2=Infinity,dd=-Infinity;r.forEach(p=>{a=Math.min(a,p[0]);b=Math.max(b,p[0]);c2=Math.min(c2,p[1]);dd=Math.max(dd,p[1])});
+    const k=Math.cos(a*Math.PI/180),sx=(dd-c2)*k||1e-5,sy=(b-a)||1e-5,s=Math.min(940/sx,280/sy),ox=(1080-sx*s)/2,oy=1300-(300-sy*s)/2;
+    x.beginPath();r.forEach((p,i)=>{const px=ox+(p[1]-c2)*k*s,py=oy-(p[0]-a)*s;i?x.lineTo(px,py):x.moveTo(px,py)});x.strokeStyle=th[1];x.lineWidth=8;x.lineJoin="round";x.shadowColor=th[1];x.shadowBlur=20;x.stroke();x.shadowBlur=0}
+  x.textAlign="right";x.fillStyle="#5b6470";x.font="600 26px system-ui";x.fillText("WolfTronix · GPS estimates",1010,1330);
+  c.toBlob(async blob=>{const f=new File([blob],"carbox-"+new Date().toISOString().slice(0,10)+".png",{type:"image/png"});
+    try{if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:"CarBox"});return}}catch(e){}
+    const u=URL.createObjectURL(blob);$("shareOut").innerHTML='<img src="'+u+'" style="width:100%;border-radius:12px" alt="Share card"><div id="help">Long-press the picture to save or share it.</div>'},"image/png")};
+renderTrack();drawSky();
 </script>
 </body>
 </html>
