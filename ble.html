@@ -108,7 +108,7 @@ a{color:var(--warn)}
   <button class="sec" id="bTheme">Theme</button>
   <label class="sec" style="display:flex;align-items:center;gap:6px;color:var(--mut);font-size:14px">Alert above <input type="number" id="alertV" min="0" max="200" value="0" inputmode="numeric"> <span id="alertU">mph</span></label>
  </div>
- <div id="help" style="margin-top:8px">0-60 and 1/4 mile start by themselves from a stop (under 2 mph). They come from GPS speed once a second, so they are estimates. HUD mirror flips the screen for a reflection in the windshield. Best times are kept on this phone.</div>
+ <div id="help" style="margin-top:8px">0-60 and 1/4 mile start by themselves from a stop (under 2 mph). They come from GPS speed once a second, so they are estimates. HUD mirror flips the screen for a reflection in the windshield. Best times are kept on this phone. Tap the speedometer to switch between 4 looks: Classic, Synthwave, Jet HUD, Hyperdrive.</div>
 </section>
 <section class="pane" id="p_track" hidden>
  <div class="grid">
@@ -338,17 +338,25 @@ document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{
   keepAwake()});
 async function keepAwake(){try{if(navigator.wakeLock&&!wake){wake=await navigator.wakeLock.request("screen");wake.addEventListener("release",()=>{wake=null})}}catch(e){}}
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)keepAwake()});
+function toast(t){let e=$("toast");if(!e){e=document.createElement("div");e.id="toast";e.style.cssText="position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:rgba(0,0,0,.85);color:#fff;padding:10px 14px;border-radius:10px;font-size:14px;z-index:99;max-width:92vw;text-align:center";document.body.appendChild(e)}e.textContent=t;e.hidden=false;clearTimeout(e._t);e._t=setTimeout(()=>e.hidden=true,4000)}
 function beep(){if(!beepCtx)return;try{const o=beepCtx.createOscillator(),g=beepCtx.createGain();o.frequency.value=1800;g.gain.value=.15;o.connect(g);g.connect(beepCtx.destination);o.start();o.stop(beepCtx.currentTime+.12)}catch(e){}}
 function bearing(a,b){const r=Math.PI/180,y=Math.sin((b[1]-a[1])*r)*Math.cos(b[0]*r),x=Math.cos(a[0]*r)*Math.sin(b[0]*r)-Math.sin(a[0]*r)*Math.cos(b[0]*r)*Math.cos((b[1]-a[1])*r);return (Math.atan2(y,x)/r+360)%360}
 const CMP=["N","NE","E","SE","S","SW","W","NW"];
-function drawGauge(mph){
-  const c=$("gauge"),x=c.getContext("2d"),W=c.width,H=c.height,cx=W/2,cy=H*0.86,R=Math.min(W*0.46,H*0.82);
-  const max=KMH?200:120,red=KMH?160:100,v=mph==null?0:Math.min(cv(mph),max),a0=Math.PI*0.95,a1=Math.PI*2.05,ang=s=>a0+(a1-a0)*s/max;
+/* ---------- speedometer faces: tap the gauge to switch. Needle/number glide at 60 fps between the 1 s GPS updates ---------- */
+const G={style:(LS.get("cb_gstyle",0)|0)%4,v:0,last:0,toast:-9e9,stars:[],names:["Classic","Synthwave","Jet HUD","Hyperdrive"]};
+for(let i=0;i<170;i++)G.stars.push({x:Math.random()*2-1,y:Math.random()*2-1,z:Math.random()});
+function drawGauge(mph){window.__gt=mph}
+function gTh(){return window.__TH||["#00e1ff","#ffe600","#ff2a1f"]}
+function gMax(){return KMH?200:120}
+function gRed(){return KMH?160:100}
+function gNum(v,none){return none?"--":String(Math.round(v))}
+function gClassic(x,W,H,v,none){
+  const cx=W/2,cy=H*0.86,R=Math.min(W*0.46,H*0.82),max=gMax(),red=gRed(),a0=Math.PI*0.95,a1=Math.PI*2.05,ang=s=>a0+(a1-a0)*Math.min(s,max)/max,th=gTh();
   x.clearRect(0,0,W,H);x.lineCap="round";
   x.lineWidth=18;x.strokeStyle="rgba(255,255,255,.07)";x.beginPath();x.arc(cx,cy,R,a0,a1);x.stroke();
   x.strokeStyle="rgba(255,60,50,.35)";x.beginPath();x.arc(cx,cy,R,ang(red),a1);x.stroke();
-  const th=window.__TH||["#00e1ff","#ffe600","#ff2a1f"],gr=x.createLinearGradient(cx-R,0,cx+R,0);gr.addColorStop(0,th[0]);gr.addColorStop(.6,th[1]);gr.addColorStop(1,th[2]);
-  if(v>0){x.strokeStyle=gr;x.shadowColor=v>=red?"#ff2a1f":"#00e1ff";x.shadowBlur=18;x.beginPath();x.arc(cx,cy,R,a0,ang(v));x.stroke();x.shadowBlur=0}
+  const gr=x.createLinearGradient(cx-R,0,cx+R,0);gr.addColorStop(0,th[0]);gr.addColorStop(.6,th[1]);gr.addColorStop(1,th[2]);
+  if(v>0.3){x.strokeStyle=gr;x.shadowColor=v>=red?"#ff2a1f":th[0];x.shadowBlur=18;x.beginPath();x.arc(cx,cy,R,a0,ang(v));x.stroke();x.shadowBlur=0}
   x.font="italic 600 15px system-ui";x.textAlign="center";x.textBaseline="middle";
   const step=KMH?20:10;
   for(let s=0;s<=max;s+=step){const t=ang(s),big=!(s%(step*2)),r1=R-14,r2=R-(big?32:24);
@@ -356,8 +364,80 @@ function drawGauge(mph){
     if(big){x.fillStyle=s>=red?"#ff4b3e":"#9aa3b0";x.fillText(s,cx+Math.cos(t)*(R-50),cy+Math.sin(t)*(R-50))}}
   const t=ang(v);x.strokeStyle="#ff2a1f";x.lineWidth=4;x.beginPath();x.moveTo(cx,cy);x.lineTo(cx+Math.cos(t)*(R-30),cy+Math.sin(t)*(R-30));x.stroke();
   x.fillStyle="#ff2a1f";x.beginPath();x.arc(cx,cy,9,0,7);x.fill();
-  x.fillStyle=v>=red?"#ff4b3e":"#ffffff";x.font="italic 800 "+Math.round(R*0.6)+"px system-ui";x.fillText(mph==null?"--":Math.round(cv(mph)),cx,cy-R*0.42);
+  x.fillStyle=v>=red?"#ff4b3e":"#ffffff";x.font="italic 800 "+Math.round(R*0.6)+"px system-ui";x.fillText(gNum(v,none),cx,cy-R*0.42);
   x.fillStyle="#9aa3b0";x.font="italic 600 18px system-ui";x.fillText(U().toUpperCase(),cx,cy-R*0.08)}
+/* 80s outrun: striped sun, grid road that rushes at you faster the faster you go, chrome digits */
+function gSynth(x,W,H,v,none,ts){
+  const th=gTh(),max=gMax(),hz=H*0.6,sr=H*0.34;
+  let g=x.createLinearGradient(0,0,0,hz);g.addColorStop(0,"#05020f");g.addColorStop(1,"#3b0a52");x.fillStyle=g;x.fillRect(0,0,W,hz);
+  x.fillStyle="#06010d";x.fillRect(0,hz,W,H-hz);
+  x.save();x.beginPath();x.arc(W/2,hz,sr,Math.PI,0);x.clip();
+  g=x.createLinearGradient(0,hz-sr,0,hz);g.addColorStop(0,th[1]);g.addColorStop(1,th[2]);x.fillStyle=g;x.fillRect(W/2-sr,hz-sr,2*sr,sr);
+  x.fillStyle="#3b0a52";for(let i=0;i<6;i++){const y=hz-sr*(0.08+i*0.12);x.fillRect(W/2-sr,y,2*sr,7-i)}
+  x.restore();
+  x.strokeStyle=th[2];x.shadowColor=th[2];x.shadowBlur=8;x.lineWidth=1.5;
+  const ph=(ts/1000*(0.15+v*0.03))%1;
+  for(let i=0;i<12;i++){const f=(i+ph)/12,y=hz+(H-hz)*f*f;x.globalAlpha=Math.min(1,f*1.6);x.beginPath();x.moveTo(0,y);x.lineTo(W,y);x.stroke()}
+  x.globalAlpha=1;for(let j=-8;j<=8;j++){x.beginPath();x.moveTo(W/2+j*10,hz);x.lineTo(W/2+j*W*0.14,H);x.stroke()}
+  x.shadowBlur=0;
+  const n=24,sw=(W-40)/n,lit=Math.round(Math.min(1,v/max)*n);
+  for(let i=0;i<n;i++){const col=i<n*0.5?th[0]:i<n*0.8?th[1]:th[2];x.fillStyle=i<lit?col:"rgba(255,255,255,.07)";if(i<lit){x.shadowColor=col;x.shadowBlur=10}x.fillRect(20+i*sw+1,10,sw-3,16);x.shadowBlur=0}
+  x.textAlign="center";x.textBaseline="middle";x.font="italic 900 "+Math.round(H*0.42)+"px system-ui";
+  const s=gNum(v,none),ty=H*0.4;g=x.createLinearGradient(0,ty-H*0.2,0,ty+H*0.2);g.addColorStop(0,"#ffffff");g.addColorStop(.48,"#bfe9ff");g.addColorStop(.52,th[0]);g.addColorStop(1,"#ffffff");
+  x.lineWidth=6;x.strokeStyle="#1a0630";x.strokeText(s,W/2,ty);x.fillStyle=g;x.shadowColor=th[2];x.shadowBlur=24;x.fillText(s,W/2,ty);x.shadowBlur=0;
+  x.font="italic 800 18px system-ui";x.fillStyle=th[1];x.fillText(U().toUpperCase(),W/2,ty+H*0.24)}
+/* fighter-jet head-up display: speed tape, heading tape, flight-path marker, pitch ladder tilts with braking/accel */
+function gJet(x,W,H,v,none){
+  const c="#3cff7a",hd=D.hd==null?null:D.hd,gl=D.g||0;x.fillStyle="#020a04";x.fillRect(0,0,W,H);
+  x.strokeStyle=c;x.fillStyle=c;x.shadowColor=c;x.shadowBlur=6;x.lineWidth=2;x.font="600 14px ui-monospace,monospace";x.textBaseline="middle";
+  const cy=H/2+10,cx=W/2;
+  x.save();x.translate(cx,cy+Math.max(-60,Math.min(60,gl*120)));x.globalAlpha=.6;
+  for(let k=-2;k<=2;k++){const y=k*45;x.setLineDash(k>0?[8,6]:[]);x.beginPath();x.moveTo(-110,y);x.lineTo(-40,y);x.moveTo(40,y);x.lineTo(110,y);x.stroke();if(k){x.textAlign="left";x.fillText(-k*5,116,y)}}
+  x.setLineDash([]);x.restore();x.globalAlpha=1;
+  x.beginPath();x.arc(cx,cy,9,0,7);x.moveTo(cx-24,cy);x.lineTo(cx-9,cy);x.moveTo(cx+9,cy);x.lineTo(cx+24,cy);x.moveTo(cx,cy-9);x.lineTo(cx,cy-18);x.stroke();
+  const tx=18,tw=78,tt=46,tb=H-14;x.save();x.beginPath();x.rect(tx,tt,tw,tb-tt);x.clip();x.textAlign="right";
+  for(let s=Math.floor(v-25);s<=v+25;s++){if(s<0)continue;const y=cy-(s-v)*7;if(s%5===0){x.beginPath();x.moveTo(tx+tw,y);x.lineTo(tx+tw-(s%10?8:14),y);x.stroke()}if(s%10===0)x.fillText(s,tx+tw-18,y)}
+  x.restore();x.strokeRect(tx,tt,tw,tb-tt);
+  x.fillStyle="#020a04";x.fillRect(tx-4,cy-22,tw+16,44);x.fillStyle=c;x.strokeRect(tx-4,cy-22,tw+16,44);
+  x.font="800 30px ui-monospace,monospace";x.textAlign="center";x.fillText(gNum(v,none),tx+tw/2+4,cy+1);
+  x.font="600 12px ui-monospace,monospace";x.fillText(U().toUpperCase(),tx+tw/2,tt-10);
+  x.save();x.beginPath();x.rect(cx-150,4,300,34);x.clip();x.textAlign="center";
+  if(hd!=null)for(let d=Math.floor(hd-40);d<=hd+40;d++){const X0=cx+(d-hd)*3.6,dd=((d%360)+360)%360;if(dd%5===0){x.beginPath();x.moveTo(X0,38);x.lineTo(X0,dd%10?32:28);x.stroke()}if(dd%30===0){x.font="600 13px ui-monospace,monospace";x.fillText({0:"N",90:"E",180:"S",270:"W"}[dd]??String(dd/10).padStart(2,"0"),X0,16)}}
+  else x.fillText("HDG ---",cx,18);
+  x.restore();x.beginPath();x.moveTo(cx-6,46);x.lineTo(cx,40);x.lineTo(cx+6,46);x.stroke();
+  x.textAlign="right";x.font="600 14px ui-monospace,monospace";const p=D.p||{};
+  x.fillText("G "+(gl>=0?"+":"")+gl.toFixed(2),W-16,H-62);x.fillText("SAT "+(p.sat??0),W-16,H-42);
+  x.fillText(p.al!=null?"ALT "+(KMH?p.al+"M":Math.round(p.al*3.281)+"FT"):"ALT ---",W-16,H-22);
+  if(hd!=null){x.font="800 22px ui-monospace,monospace";x.fillText(String(Math.round(hd)).padStart(3,"0")+"°",W-16,cy)}
+  x.shadowBlur=0}
+/* warp drive: stars streak past at your speed, arc ring around the number */
+function gWarp(x,W,H,v,none,ts){
+  const th=gTh(),max=gMax(),dt=Math.min(0.05,(ts-(G.lastW||ts))/1000);G.lastW=ts;const sp=0.05+v*0.02,cx=W/2,cy=H/2;
+  x.fillStyle="rgba(0,0,6,.45)";x.fillRect(0,0,W,H);
+  x.lineCap="round";
+  for(const s of G.stars){const z0=s.z;s.z-=sp*dt;if(s.z<=0.02){s.x=Math.random()*2-1;s.y=Math.random()*2-1;s.z=1;continue}
+    const k=W*0.35,a=[cx+s.x/z0*k,cy+s.y/z0*k],b=[cx+s.x/s.z*k,cy+s.y/s.z*k];
+    x.strokeStyle=s.z<0.3?"#ffffff":(s.x>0?th[0]:th[1]);x.globalAlpha=Math.min(1,1.2-s.z);x.lineWidth=Math.max(1,2.5*(1-s.z));
+    x.beginPath();x.moveTo(a[0],a[1]);x.lineTo(b[0],b[1]);x.stroke()}
+  x.globalAlpha=1;const R=H*0.38,a0=-Math.PI/2,fr=Math.min(1,v/max);
+  x.fillStyle="rgba(0,0,8,.75)";x.beginPath();x.arc(cx,cy,R-6,0,7);x.fill();
+  x.lineWidth=10;x.strokeStyle="rgba(255,255,255,.08)";x.beginPath();x.arc(cx,cy,R,0,7);x.stroke();
+  if(fr>0.003){const g=x.createConicGradient?x.createConicGradient(a0,cx,cy):null;if(g){g.addColorStop(0,th[0]);g.addColorStop(.6,th[1]);g.addColorStop(1,th[2]);x.strokeStyle=g}else x.strokeStyle=th[0];
+    x.shadowColor=th[fr>0.8?2:0];x.shadowBlur=20;x.beginPath();x.arc(cx,cy,R,a0,a0+fr*Math.PI*2);x.stroke();x.shadowBlur=0}
+  x.textAlign="center";x.textBaseline="middle";x.fillStyle="#fff";x.shadowColor=th[0];x.shadowBlur=18;
+  x.font="italic 900 "+Math.round(R*0.95)+"px system-ui";x.fillText(gNum(v,none),cx,cy-4);x.shadowBlur=0;
+  x.fillStyle=th[1];x.font="italic 700 16px system-ui";x.fillText(U().toUpperCase()+(v>=gRed()?"  ·  WARP":""),cx,cy+R*0.55)}
+const GF=[gClassic,gSynth,gJet,gWarp];
+function gaugeFrame(ts){requestAnimationFrame(gaugeFrame);
+  if(document.hidden||$("p_drive").hidden)return;
+  const none=window.__gt==null,t=none?0:cv(window.__gt),dt=Math.min(0.1,(ts-(G.last||ts))/1000);G.last=ts;
+  G.v+=(t-G.v)*Math.min(1,dt*6);if(Math.abs(t-G.v)<0.05)G.v=t;
+  const c=$("gauge"),x=c.getContext("2d");x.save();GF[G.style](x,c.width,c.height,Math.max(0,G.v),none,ts);x.restore();
+  if(ts-G.toast<1400){x.save();x.globalAlpha=Math.min(1,(1400-(ts-G.toast))/300);x.fillStyle="rgba(0,0,0,.65)";x.fillRect(c.width/2-110,c.height-44,220,32);
+    x.fillStyle="#fff";x.font="600 16px system-ui";x.textAlign="center";x.textBaseline="middle";x.fillText((G.style+1)+"/4  "+G.names[G.style],c.width/2,c.height-28);x.restore()}}
+$("gauge").style.cursor="pointer";
+$("gauge").addEventListener("click",()=>{G.style=(G.style+1)%GF.length;LS.set("cb_gstyle",G.style);G.toast=performance.now();const x=$("gauge").getContext("2d");x.clearRect(0,0,9999,9999)});
+requestAnimationFrame(gaugeFrame);
 function fmtT(s){s=Math.max(0,s|0);return Math.floor(s/60)+":"+String(s%60).padStart(2,"0")}
 function driveUpdate(p){
   const now=Date.now(),mph=p.s!=null?p.s/1.609:null;
@@ -373,9 +453,12 @@ function driveUpdate(p){
       if(!L.doneQm&&L.dist>=402.3){const tt=(now-L.t)/1000;L.doneQm=true;D.rQm={t:tt,v:mph};if(!D.bestQm||tt<D.bestQm.t){D.bestQm=D.rQm;LS.set("cb_bqm",D.rQm)}}
       L.prevS=mph;L.prevT=now;if(L.done60&&L.doneQm)D.launch=null}
     const lim=+$("alertV").value||0,over=lim>0&&cv(mph)>lim;$("drv").classList.toggle("alert",over);
-    if(over&&(!D.beepT||now-D.beepT>3000)){D.beepT=now;beep()}
+    if(over&&(!D.beepT||now-D.beepT>3000)){D.beepT=now;beep();toast("Beep = speed alert above "+lim+" "+U()+" (set to 0 under the gauge to turn off)")}
   }
-  if(p.la!=null){const pos=[p.la,p.lo];if(D.lastPos&&mph>5)D.hd=bearing(D.lastPos,pos);if(mph>5||!D.lastPos)D.lastPos=pos}
+  // heading: the box's own GPS course if it sends one, else the bearing between fixes at least 6 m apart (duplicate packets gave 0 = always north)
+  if(p.hd!=null&&mph>3)D.hd=p.hd;
+  else if(p.la!=null){const pos=[p.la,p.lo];if(!D.lastPos)D.lastPos=pos;else{const dy=(pos[0]-D.lastPos[0])*111320,dx=(pos[1]-D.lastPos[1])*111320*Math.cos(pos[0]*Math.PI/180);
+    if(dx*dx+dy*dy>=36){if(mph>3)D.hd=bearing(D.lastPos,pos);D.lastPos=pos}}}
   D.lastS=mph;D.lastT=now;renderDrive()}
 function renderDrive(){
   const p=D.p||{},mph=p.s!=null?p.s/1.609:null;drawGauge(mph);
