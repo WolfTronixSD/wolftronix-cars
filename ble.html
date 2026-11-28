@@ -252,8 +252,14 @@ async function read(){
   try{const v=await chD.readValue();show(JSON.parse(new TextDecoder().decode(v)))}catch(e){}
   busy=false;
 }
+// a single GPS speed far off the last one (more than ~1.1 g) is held back once: a garbled GPS line showed 100+ at 40 mph
+const SF={s:null,t:0,held:0};
+function spikeFix(p){if(p.s==null)return p;const now=Date.now(),dt=Math.max(1,(now-SF.t)/1000);
+  if(SF.hp&&SF.hp.up===p.up&&SF.hp.s===p.s)return SF.hq;   // the same packet again (notification + read)
+  if(SF.s!=null&&now-SF.t<4000&&Math.abs(p.s-SF.s)>40*dt&&!SF.held){SF.held=1;SF.hp=p;SF.hq=Object.assign({},p,{s:SF.s,la:undefined,lo:undefined});return SF.hq}
+  SF.held=0;SF.hp=null;SF.s=p.s;SF.t=now;return p}
 function show(p){
-  const now=Date.now();lastP=p;
+  p=spikeFix(p);const now=Date.now();lastP=p;
   // rate over the last ~2 s: a notification and a read of the same packet used to give 0 bytes/s, so the box
   // flipped to "No data from the GPS" every few seconds
   RW=RW.filter(r=>now-r.t<6000);if(!RW.length||RW[RW.length-1].by!==p.by||RW[RW.length-1].up!==p.up)RW.push({t:now,by:p.by,ok:p.ok,up:p.up});
