@@ -1,9 +1,9 @@
 {
- "ver": "1.1.59",
- "size": 116968,
- "sha256": "d7ce02b88109859b3f5460a1144dcbf98e8bd19dc7cc2402306c482d482167db",
+ "ver": "1.1.60",
+ "size": 118013,
+ "sha256": "90319a8e401ffb297fa4671f73898e928a801eb77b490bab518a56d1cd9c738f",
  "file": "car_main.enc",
- "salt": "blTe6VqGj2zALK8bHnw4eA==",
- "iv": "moKy8wHUvXkEEoLz",
+ "salt": "Jg2KCBJdieosPCBU21fSEQ==",
+ "iv": "C6LSmVg94L2ravtp",
  "iter": 200000
 }
