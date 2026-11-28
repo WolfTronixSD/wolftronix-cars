@@ -28,12 +28,81 @@ button.sec{background:var(--line);color:var(--tx);padding:10px 12px;font-size:14
 .row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 a{color:var(--warn)}
 #help{color:var(--mut);font-size:14px}
+/* Drive + Today tabs: night racing cockpit (big digits, red redline, HUD mirror for the windshield) */
+.tabs{display:flex;gap:6px;margin:0 0 12px;position:sticky;top:0;z-index:5;background:var(--bg);padding:6px 0}
+.tabs button{flex:1;background:var(--card);color:var(--mut);padding:10px 6px;font-size:15px;letter-spacing:.5px;text-transform:uppercase;font-style:italic}
+.tabs button.on{background:var(--bad);color:#fff}
+.pane[hidden]{display:none!important}
+#drv{position:relative;border-radius:16px;background:radial-gradient(120% 90% at 50% 0%,#2a0d0d 0%,#0b0c10 55%);padding:10px 10px 14px;overflow:hidden}
+#drv.hud{transform:scaleY(-1)}
+#drv.red{filter:sepia(1) hue-rotate(-50deg) saturate(4) brightness(.75)}
+#drv.alert{box-shadow:inset 0 0 0 6px var(--bad)}
+#gauge{width:100%;max-width:520px;display:block;margin:0 auto}
+.dgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px}
+.dgrid .t{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);padding:8px}
+.dgrid .t b{font-size:22px;font-variant-numeric:tabular-nums;font-style:italic}
+.dgrid .t span{font-size:11px}
+.dctl{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.dctl button{flex:1 1 auto}
+.dctl button.on{background:var(--bad);color:#fff}
+.dctl input{width:70px;font:inherit;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--tx)}
+@media (orientation:landscape) and (max-height:520px){#gauge{max-width:56vh}.dgrid{grid-template-columns:repeat(6,1fr)}}
+.tday{display:flex;flex-direction:column;gap:8px}
+.tday table{width:100%;border-collapse:collapse;font-size:14px}
+.tday td,.tday th{padding:7px 6px;border-top:1px solid var(--line);text-align:left;font-variant-numeric:tabular-nums}
+.tday th{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
 </style>
 </head>
 <body>
 <h1>Car<b>Box</b> live</h1>
 <button id="conn">Connect to CarBox</button>
 <div id="st">Bluetooth: Chrome on Android, or the Bluefy app on iPhone. Only while the car runs.</div>
+<div class="tabs" role="tablist">
+  <button data-tab="drive" class="on">Drive</button><button data-tab="today">Today</button><button data-tab="gps">GPS</button><button data-tab="update">Update</button>
+</div>
+<section class="pane" id="p_drive">
+ <div id="drv">
+  <canvas id="gauge" width="520" height="330" aria-label="Speedometer"></canvas>
+  <div class="dgrid">
+   <div class="t"><span>Trip</span><b id="dTrip">-</b></div>
+   <div class="t"><span>Time</span><b id="dTime">-</b></div>
+   <div class="t"><span>Avg</span><b id="dAvg">-</b></div>
+   <div class="t"><span>Top</span><b id="dTop">-</b></div>
+   <div class="t"><span>0-60</span><b id="d060">-</b></div>
+   <div class="t"><span>1/4 mile</span><b id="dQm">-</b></div>
+   <div class="t"><span>Heading</span><b id="dHd">-</b></div>
+   <div class="t"><span>Accel</span><b id="dG">-</b></div>
+   <div class="t"><span>GPS</span><b id="dSat">-</b></div>
+   <div class="t"><span>Altitude</span><b id="dAlt">-</b></div>
+   <div class="t"><span>Box LiPo</span><b id="dLipo">-</b></div>
+   <div class="t"><span>Car 12 V</span><b id="dV12">-</b></div>
+  </div>
+ </div>
+ <div class="dctl">
+  <button class="sec" id="bUnit">km/h</button>
+  <button class="sec" id="bHud">HUD mirror</button>
+  <button class="sec" id="bRed">Night red</button>
+  <button class="sec" id="bFull">Full screen</button>
+  <button class="sec" id="bReset">New trip</button>
+  <label class="sec" style="display:flex;align-items:center;gap:6px;color:var(--mut);font-size:14px">Alert above <input type="number" id="alertV" min="0" max="200" value="0" inputmode="numeric"> <span id="alertU">mph</span></label>
+ </div>
+ <div id="help" style="margin-top:8px">0-60 and 1/4 mile start by themselves from a stop (under 2 mph). They come from GPS speed once a second, so they are estimates. HUD mirror flips the screen for a reflection in the windshield. Best times are kept on this phone.</div>
+</section>
+<section class="pane" id="p_today" hidden>
+ <div class="tday">
+  <div class="grid">
+   <div class="t"><span>Today</span><b id="tMi">-</b></div>
+   <div class="t"><span>Driving time</span><b id="tDur">-</b></div>
+   <div class="t"><span>Trips</span><b id="tN">-</b></div>
+   <div class="t"><span>Top today</span><b id="tTop">-</b></div>
+   <div class="t"><span>This week</span><b id="wMi">-</b></div>
+   <div class="t"><span>Best 0-60</span><b id="tBest">-</b></div>
+  </div>
+  <table><thead><tr><th>Start - end</th><th>Miles</th><th>Time</th><th>Avg / top</th></tr></thead><tbody id="tRows"></tbody></table>
+  <div id="help">Trips seen by this phone (while connected). The full history of every drive, also without the phone, is on the Garage Cars page (cyd.local/cars, Trips).</div>
+ </div>
+</section>
+<section class="pane" id="p_gps" hidden>
 <div id="diag">Not connected</div>
 <div class="grid">
   <div class="t"><span>Satellites</span><b id="sat">-</b></div>
@@ -56,6 +125,8 @@ a{color:var(--warn)}
   <button class="sec" data-c="auto">Auto baud</button>
   <button class="sec" data-c="reset">GPS factory reset</button>
 </div>
+</section>
+<section class="pane" id="p_update" hidden>
 <div class="t wide" id="fwbox" style="margin-bottom:12px">
   <span>Firmware update (car node main.py)</span>
   <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
@@ -72,6 +143,7 @@ a{color:var(--warn)}
     <div id="fwst" style="font-size:14px;color:var(--mut)">Download main.py from GitHub (car_node/main.py), pick it here, enter the PIN, tap Install. About a minute. The box restarts with it and goes back to the old one if it crashes.</div>
   </div>
 </div>
+</section>
 <div id="help">The GPS LED blinking once a second means the module has a fix. If this page then shows 0 bytes/s, the wire from GPS TX to the box is the problem.</div>
 <script>
 const SVC="7a5e0001-3c1d-4b8e-9f2a-0c4b5d6e7f80",DATA="7a5e0002-3c1d-4b8e-9f2a-0c4b5d6e7f80",CMD="7a5e0003-3c1d-4b8e-9f2a-0c4b5d6e7f80";
@@ -152,6 +224,7 @@ function show(p){
   if(p.la!=null){const a=document.createElement("a");a.href="https://maps.google.com/?q="+p.la+","+p.lo;a.target="_blank";a.textContent=p.la+", "+p.lo;pos.textContent="";pos.append(a)}
   $("ln").textContent=p.ln||"(nothing yet)";
   $("port").textContent="RX GPIO "+p.rx+", TX GPIO "+p.tx+", "+p.baud+" baud · firmware "+p.v;
+  try{driveUpdate(p)}catch(e){}
   if(!p.on)diag(p.low?"GPS off: box battery low":"GPS off",p.low?"It comes back when the box LiPo charges above 3.5 V.":"","var(--bad)");
   else if(p.by===0||bps===0)diag("No data from the GPS","GPS powered, but nothing arrives on GPIO "+p.rx+". Check the GPS TX wire and its 1k.","var(--bad)");
   else if(!p.ok||(bps>0&&okRate===0&&p.sat==null))diag("Junk from the GPS","Bytes arrive but no NMEA lines: wrong baud. The box tries other speeds every 8 s.","var(--warn)");
@@ -197,6 +270,94 @@ $("fwgo").onclick=async()=>{
   }catch(e){fwst("Update failed: "+e.message+". The box keeps its old firmware.","var(--bad)");$("fwbar").style.width="0"}
   sending=false;fwRun=false;$("fwgo").disabled=false;
 };
+/* ---------- Drive + Today ---------- */
+const LS={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+let KMH=LS.get("cb_kmh",false),HUD=false,RED=LS.get("cb_red",false),wake=null,beepCtx=null;
+const D={top:0,t0:null,d0:0,up0:0,lastS:null,lastT:null,lastPos:null,hd:null,g:0,launch:null,best060:LS.get("cb_b060",null),bestQm:LS.get("cb_bqm",null),r060:null,rQm:null,trip:null,lastUp:null,p:null};
+const U=()=>KMH?"km/h":"mph",cv=mph=>KMH?mph*1.609:mph;
+$("bUnit").textContent=KMH?"mph":"km/h";$("alertU").textContent=U();$("alertV").value=LS.get("cb_alert",0);
+$("bUnit").onclick=()=>{KMH=!KMH;LS.set("cb_kmh",KMH);$("bUnit").textContent=KMH?"mph":"km/h";$("alertU").textContent=U();renderDrive()};
+$("bHud").onclick=()=>{HUD=!HUD;$("drv").classList.toggle("hud",HUD);$("bHud").classList.toggle("on",HUD)};
+$("bRed").onclick=()=>{RED=!RED;LS.set("cb_red",RED);$("drv").classList.toggle("red",RED);$("bRed").classList.toggle("on",RED)};
+$("drv").classList.toggle("red",RED);$("bRed").classList.toggle("on",RED);
+$("bFull").onclick=()=>{const e=$("p_drive");const f=e.requestFullscreen||e.webkitRequestFullscreen;if(f)f.call(e)};
+$("bReset").onclick=()=>{endTrip();D.top=0;D.t0=null;D.r060=null;D.rQm=null;renderDrive()};
+$("alertV").onchange=()=>LS.set("cb_alert",+$("alertV").value||0);
+document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll(".tabs button").forEach(x=>x.classList.toggle("on",x===b));
+  ["drive","today","gps","update"].forEach(t=>{$("p_"+t).hidden=t!==b.dataset.tab});
+  if(b.dataset.tab==="today")renderToday();
+  if(!beepCtx){try{beepCtx=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}
+  keepAwake()});
+async function keepAwake(){try{if(navigator.wakeLock&&!wake){wake=await navigator.wakeLock.request("screen");wake.addEventListener("release",()=>{wake=null})}}catch(e){}}
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)keepAwake()});
+function beep(){if(!beepCtx)return;try{const o=beepCtx.createOscillator(),g=beepCtx.createGain();o.frequency.value=1800;g.gain.value=.15;o.connect(g);g.connect(beepCtx.destination);o.start();o.stop(beepCtx.currentTime+.12)}catch(e){}}
+function bearing(a,b){const r=Math.PI/180,y=Math.sin((b[1]-a[1])*r)*Math.cos(b[0]*r),x=Math.cos(a[0]*r)*Math.sin(b[0]*r)-Math.sin(a[0]*r)*Math.cos(b[0]*r)*Math.cos((b[1]-a[1])*r);return (Math.atan2(y,x)/r+360)%360}
+const CMP=["N","NE","E","SE","S","SW","W","NW"];
+function drawGauge(mph){
+  const c=$("gauge"),x=c.getContext("2d"),W=c.width,H=c.height,cx=W/2,cy=H*0.86,R=Math.min(W*0.46,H*0.82);
+  const max=KMH?200:120,red=KMH?160:100,v=mph==null?0:Math.min(cv(mph),max),a0=Math.PI*0.95,a1=Math.PI*2.05,ang=s=>a0+(a1-a0)*s/max;
+  x.clearRect(0,0,W,H);x.lineCap="round";
+  x.lineWidth=18;x.strokeStyle="rgba(255,255,255,.07)";x.beginPath();x.arc(cx,cy,R,a0,a1);x.stroke();
+  x.strokeStyle="rgba(255,60,50,.35)";x.beginPath();x.arc(cx,cy,R,ang(red),a1);x.stroke();
+  const gr=x.createLinearGradient(cx-R,0,cx+R,0);gr.addColorStop(0,"#00e1ff");gr.addColorStop(.6,"#ffe600");gr.addColorStop(1,"#ff2a1f");
+  if(v>0){x.strokeStyle=gr;x.shadowColor=v>=red?"#ff2a1f":"#00e1ff";x.shadowBlur=18;x.beginPath();x.arc(cx,cy,R,a0,ang(v));x.stroke();x.shadowBlur=0}
+  x.font="italic 600 15px system-ui";x.textAlign="center";x.textBaseline="middle";
+  const step=KMH?20:10;
+  for(let s=0;s<=max;s+=step){const t=ang(s),big=!(s%(step*2)),r1=R-14,r2=R-(big?32:24);
+    x.strokeStyle=s>=red?"#ff4b3e":"#cfd5dd";x.lineWidth=big?3:2;x.beginPath();x.moveTo(cx+Math.cos(t)*r1,cy+Math.sin(t)*r1);x.lineTo(cx+Math.cos(t)*r2,cy+Math.sin(t)*r2);x.stroke();
+    if(big){x.fillStyle=s>=red?"#ff4b3e":"#9aa3b0";x.fillText(s,cx+Math.cos(t)*(R-50),cy+Math.sin(t)*(R-50))}}
+  const t=ang(v);x.strokeStyle="#ff2a1f";x.lineWidth=4;x.beginPath();x.moveTo(cx,cy);x.lineTo(cx+Math.cos(t)*(R-30),cy+Math.sin(t)*(R-30));x.stroke();
+  x.fillStyle="#ff2a1f";x.beginPath();x.arc(cx,cy,9,0,7);x.fill();
+  x.fillStyle=v>=red?"#ff4b3e":"#ffffff";x.font="italic 800 "+Math.round(R*0.6)+"px system-ui";x.fillText(mph==null?"--":Math.round(cv(mph)),cx,cy-R*0.42);
+  x.fillStyle="#9aa3b0";x.font="italic 600 18px system-ui";x.fillText(U().toUpperCase(),cx,cy-R*0.08)}
+function fmtT(s){s=Math.max(0,s|0);return Math.floor(s/60)+":"+String(s%60).padStart(2,"0")}
+function driveUpdate(p){
+  const now=Date.now(),mph=p.s!=null?p.s/1.609:null;
+  if(D.lastUp!=null&&p.up!=null&&p.up<D.lastUp-5){endTrip();D.top=0;D.t0=null;D.r060=null;D.rQm=null}   // the box started a new drive
+  D.lastUp=p.up;D.p=p;
+  if(D.t0==null){D.t0=now;D.d0=p.d||0;D.up0=p.up||0;D.trip={start:now,top:0}}
+  if(mph!=null){
+    D.top=Math.max(D.top,mph);if(D.trip)D.trip.top=Math.max(D.trip.top,mph);
+    if(D.lastS!=null&&D.lastT){const dt=(now-D.lastT)/1000;if(dt>0&&dt<4)D.g=((mph-D.lastS)*0.44704/dt)/9.81}
+    if(mph<2){D.launch={t:now,dist:0,done60:false,doneQm:false,prevS:mph,prevT:now}}   // armed at a stop
+    else if(D.launch){const L=D.launch,dt=(now-L.prevT)/1000;L.dist+=((mph+L.prevS)/2)*0.44704*dt;
+      if(!L.done60&&mph>=60){const f=(60-L.prevS)/Math.max(.01,mph-L.prevS),tt=(L.prevT+f*(now-L.prevT)-L.t)/1000;L.done60=true;D.r060=tt;if(!D.best060||tt<D.best060){D.best060=tt;LS.set("cb_b060",tt)}}
+      if(!L.doneQm&&L.dist>=402.3){const tt=(now-L.t)/1000;L.doneQm=true;D.rQm={t:tt,v:mph};if(!D.bestQm||tt<D.bestQm.t){D.bestQm=D.rQm;LS.set("cb_bqm",D.rQm)}}
+      L.prevS=mph;L.prevT=now;if(L.done60&&L.doneQm)D.launch=null}
+    const lim=+$("alertV").value||0,over=lim>0&&cv(mph)>lim;$("drv").classList.toggle("alert",over);
+    if(over&&(!D.beepT||now-D.beepT>3000)){D.beepT=now;beep()}
+  }
+  if(p.la!=null){const pos=[p.la,p.lo];if(D.lastPos&&mph>5)D.hd=bearing(D.lastPos,pos);if(mph>5||!D.lastPos)D.lastPos=pos}
+  D.lastS=mph;D.lastT=now;renderDrive()}
+function renderDrive(){
+  const p=D.p||{},mph=p.s!=null?p.s/1.609:null;drawGauge(mph);
+  const mi=Math.max(0,((p.d||0)-D.d0)/1609),sec=Math.max(0,(p.up||0)-D.up0);
+  $("dTrip").textContent=(KMH?mi*1.609:mi).toFixed(1);$("dTime").textContent=fmtT(sec);
+  $("dAvg").textContent=sec>30?Math.round(cv(mi/(sec/3600))):"-";$("dTop").textContent=D.top?Math.round(cv(D.top)):"-";
+  $("d060").textContent=D.r060?D.r060.toFixed(1)+"s":(D.best060?"best "+D.best060.toFixed(1):"-");
+  $("dQm").textContent=D.rQm?D.rQm.t.toFixed(1)+"s":(D.bestQm?"best "+D.bestQm.t.toFixed(1):"-");
+  $("dHd").textContent=D.hd==null?"-":CMP[Math.round(D.hd/45)%8]+" "+Math.round(D.hd)+"°";
+  $("dG").textContent=mph==null?"-":(D.g>=0?"+":"")+D.g.toFixed(2)+"g";
+  $("dSat").textContent=(p.sat??0)+" "+({3:"3D",2:"2D"}[p.fx]||"no fix");$("dSat").style.color=p.fx>=2?"var(--ok)":"var(--warn)";
+  $("dAlt").textContent=p.al!=null?(KMH?p.al+" m":Math.round(p.al*3.281)+" ft"):"-";
+  $("dLipo").textContent=p.b!=null?p.b.toFixed(2):"-";$("dLipo").style.color=p.b!=null&&p.b<3.5?"var(--bad)":"";
+  $("dV12").textContent=p.v12!=null?p.v12.toFixed(1):"-";$("dV12").style.color=p.v12!=null&&p.v12<11.9?"var(--bad)":(p.v12>=13.2?"var(--ok)":"")}
+function endTrip(){
+  const p=D.p;if(!D.trip||!p)return;const mi=Math.max(0,((p.d||0)-D.d0)/1609),dur=Math.max(0,(p.up||0)-D.up0);
+  if(mi>=0.1){const L=LS.get("cb_trips",[]);L.push({s:D.trip.start,e:Date.now(),mi:+mi.toFixed(2),dur:dur,top:Math.round(D.trip.top)});LS.set("cb_trips",L.slice(-300))}
+  D.trip=null}
+window.addEventListener("pagehide",endTrip);
+function renderToday(){
+  const L=LS.get("cb_trips",[]),d0=new Date();d0.setHours(0,0,0,0);const w0=d0.getTime()-6*864e5;
+  if(D.trip&&D.p){const mi=Math.max(0,((D.p.d||0)-D.d0)/1609);if(mi>=0.1)L.push({s:D.trip.start,e:Date.now(),mi:+mi.toFixed(2),dur:Math.max(0,(D.p.up||0)-D.up0),top:Math.round(D.trip.top),live:1})}
+  const T=L.filter(t=>t.s>=d0.getTime()),W=L.filter(t=>t.s>=w0);
+  const sum=(a,k)=>a.reduce((x,t)=>x+t[k],0),hm=d=>new Date(d).toTimeString().slice(0,5),unit=KMH?"km":"mi",dist=m=>KMH?m*1.609:m;
+  $("tMi").textContent=dist(sum(T,"mi")).toFixed(1)+" "+unit;$("tDur").textContent=Math.round(sum(T,"dur")/60)+" min";
+  $("tN").textContent=T.length;$("tTop").textContent=T.length?Math.round(cv(Math.max(...T.map(t=>t.top))))+" "+U():"-";
+  $("wMi").textContent=dist(sum(W,"mi")).toFixed(0)+" "+unit;$("tBest").textContent=D.best060?D.best060.toFixed(1)+" s":"-";
+  $("tRows").innerHTML=T.slice().reverse().map(t=>"<tr><td>"+hm(t.s)+" - "+(t.live?"now":hm(t.e))+"</td><td>"+dist(t.mi).toFixed(1)+"</td><td>"+Math.round(t.dur/60)+" min</td><td>"+(t.dur>30?Math.round(cv(t.mi/(t.dur/3600))):"-")+" / "+Math.round(cv(t.top))+"</td></tr>").join("")||'<tr><td colspan="4" style="color:var(--mut)">No trips today yet.</td></tr>'}
+drawGauge(null);
 </script>
 </body>
 </html>
