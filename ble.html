@@ -51,6 +51,22 @@ a{color:var(--warn)}
 .tday table{width:100%;border-collapse:collapse;font-size:14px}
 .tday td,.tday th{padding:7px 6px;border-top:1px solid var(--line);text-align:left;font-variant-numeric:tabular-nums}
 .tday th{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+#diag{min-height:78px}
+#diag small{min-height:1.3em}
+:root{--neon:#ff2a1f}
+#leds{display:grid;grid-template-columns:repeat(15,1fr);gap:4px;margin:2px 4px 6px}
+#leds i{display:block;height:9px;border-radius:3px;background:rgba(255,255,255,.06);transition:background .15s}
+.extra{display:grid;grid-template-columns:2fr 2fr 1fr;gap:6px;margin-top:6px}
+.extra canvas{width:100%;height:auto;display:block;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:12px}
+#tree{position:absolute;inset:0;background:rgba(5,6,9,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;z-index:3}
+#tree[hidden]{display:none}
+#tree div{display:flex;flex-direction:column;gap:10px}
+#tree b{width:56px;height:56px;border-radius:50%;background:#222;box-shadow:inset 0 0 0 3px #333}
+#tree b.amb{background:#ffb300;box-shadow:0 0 24px #ffb300}
+#tree b.grn{background:#18e05b;box-shadow:0 0 30px #18e05b}
+#tree b.red{background:#ff2a1f;box-shadow:0 0 30px #ff2a1f}
+#treeMsg{font:italic 800 26px system-ui;letter-spacing:1px}
+@media (max-width:420px){.extra{grid-template-columns:1fr 1fr}.extra canvas#cmp{display:none}}
 </style>
 </head>
 <body>
@@ -62,7 +78,9 @@ a{color:var(--warn)}
 </div>
 <section class="pane" id="p_drive">
  <div id="drv">
+  <div id="leds" aria-hidden="true"></div>
   <canvas id="gauge" width="520" height="330" aria-label="Speedometer"></canvas>
+  <div id="tree" hidden><div><b></b><b></b><b></b><b></b><b></b></div><span id="treeMsg">Ready</span><small style="color:var(--mut)">tap to close</small></div>
   <div class="dgrid">
    <div class="t"><span>Trip</span><b id="dTrip">-</b></div>
    <div class="t"><span>Time</span><b id="dTime">-</b></div>
@@ -77,6 +95,7 @@ a{color:var(--warn)}
    <div class="t"><span>Box LiPo</span><b id="dLipo">-</b></div>
    <div class="t"><span>Car 12 V</span><b id="dV12">-</b></div>
   </div>
+  <div class="extra"><canvas id="spark" width="300" height="110"></canvas><canvas id="route" width="300" height="110"></canvas><canvas id="cmp" width="110" height="110"></canvas></div>
  </div>
  <div class="dctl">
   <button class="sec" id="bUnit">km/h</button>
@@ -84,6 +103,9 @@ a{color:var(--warn)}
   <button class="sec" id="bRed">Night red</button>
   <button class="sec" id="bFull">Full screen</button>
   <button class="sec" id="bReset">New trip</button>
+  <button class="sec" id="bTree">Launch tree</button>
+  <button class="sec" id="bVoice">Voice</button>
+  <button class="sec" id="bTheme">Theme</button>
   <label class="sec" style="display:flex;align-items:center;gap:6px;color:var(--mut);font-size:14px">Alert above <input type="number" id="alertV" min="0" max="200" value="0" inputmode="numeric"> <span id="alertU">mph</span></label>
  </div>
  <div id="help" style="margin-top:8px">0-60 and 1/4 mile start by themselves from a stop (under 2 mph). They come from GPS speed once a second, so they are estimates. HUD mirror flips the screen for a reflection in the windshield. Best times are kept on this phone.</div>
@@ -150,7 +172,7 @@ const SVC="7a5e0001-3c1d-4b8e-9f2a-0c4b5d6e7f80",DATA="7a5e0002-3c1d-4b8e-9f2a-0
 const $=id=>document.getElementById(id);
 let dev=null,chD=null,chC=null,chF=null,busy=false,last=null,timer=null,lastT=0,lastP=null,fwRun=false,sending=false;
 const FW="7a5e0004-3c1d-4b8e-9f2a-0c4b5d6e7f80";
-let REL=null;   // decrypted release main.py, ready to install
+let REL=null,RW=[],lastBps=null,lastOk=0;   // decrypted release main.py, ready to install
 function upst(t,col){$("upst").textContent=t;$("upst").style.color=col||"var(--mut)"}
 function vt(v){return (v||"0").split(".").map(Number)}
 function newer(a,b){a=vt(a);b=vt(b);for(let i=0;i<Math.max(a.length,b.length);i++){if((a[i]||0)!==(b[i]||0))return (a[i]||0)>(b[i]||0)}return false}
@@ -178,7 +200,7 @@ $("upchk").onclick=async()=>{
 };
 try{$("fwpin").value=localStorage.getItem("carbox_pin")||"";$("fwpass").value=localStorage.getItem("carbox_pass")||""}catch(e){}
 function st(t){$("st").textContent=t}
-function diag(txt,sub,col){const d=$("diag");d.innerHTML="";d.append(txt);if(sub){const s=document.createElement("small");s.textContent=sub;d.append(s)}d.style.borderLeftColor=col}
+function diag(txt,sub,col){const d=$("diag");if(d.dataset.k===txt+"|"+sub+"|"+col)return;d.dataset.k=txt+"|"+sub+"|"+col;d.innerHTML="";d.append(txt);const s=document.createElement("small");s.textContent=sub||" ";d.append(s);d.style.borderLeftColor=col}
 function hms(s){s=s|0;return s<60?s+" s":s<3600?Math.floor(s/60)+" min":Math.floor(s/3600)+" h "+Math.floor(s%3600/60)+" min"}
 async function connect(){
   if(!navigator.bluetooth){st("This browser has no Bluetooth. Use Chrome on Android or the Bluefy app on iPhone.");return}
@@ -210,9 +232,12 @@ async function read(){
 }
 function show(p){
   const now=Date.now();lastP=p;
-  let bps="-";if(last&&now>last.t){bps=Math.max(0,Math.round((p.by-last.by)*1000/(now-last.t)))}
-  const okRate=last?p.ok-last.ok:0;
-  last={t:now,by:p.by,ok:p.ok};lastT=now;
+  // rate over the last ~2 s: a notification and a read of the same packet used to give 0 bytes/s, so the box
+  // flipped to "No data from the GPS" every few seconds
+  RW=RW.filter(r=>now-r.t<6000);if(!RW.length||RW[RW.length-1].by!==p.by||RW[RW.length-1].up!==p.up)RW.push({t:now,by:p.by,ok:p.ok,up:p.up});
+  const ref=RW.find(r=>now-r.t>=1500)||RW[0];let bps="-",okRate=0;
+  if(ref&&now-ref.t>=1500){bps=Math.max(0,Math.round((p.by-ref.by)*1000/(now-ref.t)));okRate=p.ok-ref.ok}else if(lastBps!=null){bps=lastBps;okRate=lastOk}
+  lastBps=bps;lastOk=okRate;last={t:now,by:p.by,ok:p.ok};lastT=now;
   $("sat").textContent=p.sat??"-";$("nv").textContent=p.nv||"-";
   $("spd").textContent=p.s!=null?Math.round(p.s/1.609)+" mph":"-";
   $("fx").textContent={3:"3D",2:"2D"}[p.fx]||"none";
@@ -224,7 +249,7 @@ function show(p){
   if(p.la!=null){const a=document.createElement("a");a.href="https://maps.google.com/?q="+p.la+","+p.lo;a.target="_blank";a.textContent=p.la+", "+p.lo;pos.textContent="";pos.append(a)}
   $("ln").textContent=p.ln||"(nothing yet)";
   $("port").textContent="RX GPIO "+p.rx+", TX GPIO "+p.tx+", "+p.baud+" baud · firmware "+p.v;
-  try{driveUpdate(p)}catch(e){}
+  try{driveUpdate(p);coolUpdate(p)}catch(e){console.error(e)}
   if(!p.on)diag(p.low?"GPS off: box battery low":"GPS off",p.low?"It comes back when the box LiPo charges above 3.5 V.":"","var(--bad)");
   else if(p.by===0||bps===0)diag("No data from the GPS","GPS powered, but nothing arrives on GPIO "+p.rx+". Check the GPS TX wire and its 1k.","var(--bad)");
   else if(!p.ok||(bps>0&&okRate===0&&p.sat==null))diag("Junk from the GPS","Bytes arrive but no NMEA lines: wrong baud. The box tries other speeds every 8 s.","var(--warn)");
@@ -300,7 +325,7 @@ function drawGauge(mph){
   x.clearRect(0,0,W,H);x.lineCap="round";
   x.lineWidth=18;x.strokeStyle="rgba(255,255,255,.07)";x.beginPath();x.arc(cx,cy,R,a0,a1);x.stroke();
   x.strokeStyle="rgba(255,60,50,.35)";x.beginPath();x.arc(cx,cy,R,ang(red),a1);x.stroke();
-  const gr=x.createLinearGradient(cx-R,0,cx+R,0);gr.addColorStop(0,"#00e1ff");gr.addColorStop(.6,"#ffe600");gr.addColorStop(1,"#ff2a1f");
+  const th=(typeof THEMES!=="undefined"&&THEMES[X.theme])||["#00e1ff","#ffe600","#ff2a1f"],gr=x.createLinearGradient(cx-R,0,cx+R,0);gr.addColorStop(0,th[0]);gr.addColorStop(.6,th[1]);gr.addColorStop(1,th[2]);
   if(v>0){x.strokeStyle=gr;x.shadowColor=v>=red?"#ff2a1f":"#00e1ff";x.shadowBlur=18;x.beginPath();x.arc(cx,cy,R,a0,ang(v));x.stroke();x.shadowBlur=0}
   x.font="italic 600 15px system-ui";x.textAlign="center";x.textBaseline="middle";
   const step=KMH?20:10;
@@ -358,6 +383,60 @@ function renderToday(){
   $("wMi").textContent=dist(sum(W,"mi")).toFixed(0)+" "+unit;$("tBest").textContent=D.best060?D.best060.toFixed(1)+" s":"-";
   $("tRows").innerHTML=T.slice().reverse().map(t=>"<tr><td>"+hm(t.s)+" - "+(t.live?"now":hm(t.e))+"</td><td>"+dist(t.mi).toFixed(1)+"</td><td>"+Math.round(t.dur/60)+" min</td><td>"+(t.dur>30?Math.round(cv(t.mi/(t.dur/3600))):"-")+" / "+Math.round(cv(t.top))+"</td></tr>").join("")||'<tr><td colspan="4" style="color:var(--mut)">No trips today yet.</td></tr>'}
 drawGauge(null);
+/* ---------- extra cockpit: shift LEDs, speed trace, live route, compass, peak g, launch tree, voice, themes ---------- */
+const X={hist:[],route:[],peakG:0,voice:LS.get("cb_voice",false),theme:LS.get("cb_theme","red"),tree:null};
+const THEMES={red:["#00e1ff","#ffe600","#ff2a1f"],blue:["#00ffa3","#00b3ff","#7a5cff"],green:["#b6ff00","#00ff6a","#00e1ff"]};
+(function(){const L=$("leds");for(let i=0;i<15;i++){const d=document.createElement("i");L.appendChild(d)}})();
+function applyTheme(){const t=THEMES[X.theme]||THEMES.red;document.documentElement.style.setProperty("--neon",t[2]);$("bTheme").textContent="Theme: "+X.theme}
+$("bTheme").onclick=()=>{const k=Object.keys(THEMES);X.theme=k[(k.indexOf(X.theme)+1)%k.length];LS.set("cb_theme",X.theme);applyTheme();renderDrive()};
+$("bVoice").onclick=()=>{X.voice=!X.voice;LS.set("cb_voice",X.voice);$("bVoice").classList.toggle("on",X.voice);if(X.voice)say("Voice on")};
+$("bVoice").classList.toggle("on",X.voice);applyTheme();
+function say(t){if(!X.voice||!window.speechSynthesis)return;try{const u=new SpeechSynthesisUtterance(t);u.rate=1.05;speechSynthesis.speak(u)}catch(e){}}
+function leds(mph){const max=KMH?200:120,red=KMH?160:100,v=mph==null?0:cv(mph),n=Math.round(Math.min(1,v/max)*15),t=THEMES[X.theme]||THEMES.red,flash=v>=red&&(Date.now()/250|0)%2;
+  [...$("leds").children].forEach((d,i)=>{const col=i<6?t[0]:i<11?t[1]:t[2];d.style.background=i<n&&!flash?col:"rgba(255,255,255,.06)";d.style.boxShadow=i<n&&!flash?"0 0 10px "+col:"none"})}
+function drawSpark(){const c=$("spark"),x=c.getContext("2d"),W=c.width,H=c.height,h=X.hist;x.clearRect(0,0,W,H);if(h.length<2)return;
+  const mx=Math.max(30,...h.map(p=>p.v)),t1=h[h.length-1].t,t0=t1-120000,X0=t=>(t-t0)/120000*W,Y=v=>H-4-(v/mx)*(H-14);
+  x.strokeStyle="rgba(255,255,255,.08)";x.beginPath();x.moveTo(0,Y(mx/2));x.lineTo(W,Y(mx/2));x.stroke();
+  const t=THEMES[X.theme]||THEMES.red,g=x.createLinearGradient(0,H,0,0);g.addColorStop(0,t[0]);g.addColorStop(1,t[2]);
+  x.beginPath();h.forEach((p,i)=>i?x.lineTo(X0(p.t),Y(p.v)):x.moveTo(X0(p.t),Y(p.v)));x.strokeStyle=g;x.lineWidth=2.5;x.stroke();
+  x.lineTo(X0(t1),H);x.lineTo(X0(h[0].t),H);x.closePath();x.globalAlpha=.15;x.fillStyle=g;x.fill();x.globalAlpha=1;
+  x.fillStyle="#9aa3b0";x.font="11px system-ui";x.fillText("speed, last 2 min · max "+Math.round(cv(mx)),6,12)}
+function drawRoute(){const c=$("route"),x=c.getContext("2d"),W=c.width,H=c.height,r=X.route;x.clearRect(0,0,W,H);
+  x.fillStyle="#9aa3b0";x.font="11px system-ui";x.fillText(r.length<2?"route appears once the GPS has a fix":"this trip",6,12);if(r.length<2)return;
+  let a=Infinity,b=-Infinity,c2=Infinity,d=-Infinity;r.forEach(p=>{a=Math.min(a,p[0]);b=Math.max(b,p[0]);c2=Math.min(c2,p[1]);d=Math.max(d,p[1])});
+  const k=Math.cos(a*Math.PI/180),sx=(d-c2)*k||1e-5,sy=(b-a)||1e-5,s=Math.min((W-20)/sx,(H-26)/sy),ox=(W-sx*s)/2,oy=(H+12+sy*s)/2;
+  const P=p=>[ox+(p[1]-c2)*k*s,oy-(p[0]-a)*s];x.lineJoin="round";
+  x.beginPath();r.forEach((p,i)=>{const q=P(p);i?x.lineTo(q[0],q[1]):x.moveTo(q[0],q[1])});x.strokeStyle=(THEMES[X.theme]||THEMES.red)[1];x.lineWidth=3;x.stroke();
+  const s0=P(r[0]),e=P(r[r.length-1]);x.fillStyle="#3ccf6a";x.beginPath();x.arc(s0[0],s0[1],4,0,7);x.fill();
+  x.fillStyle="#ff2a1f";x.shadowColor="#ff2a1f";x.shadowBlur=10;x.beginPath();x.arc(e[0],e[1],5,0,7);x.fill();x.shadowBlur=0}
+function drawCompass(){const c=$("cmp"),x=c.getContext("2d"),W=c.width,R=W/2-6,cx=W/2,cy=W/2;x.clearRect(0,0,W,W);
+  x.strokeStyle="rgba(255,255,255,.15)";x.lineWidth=2;x.beginPath();x.arc(cx,cy,R,0,7);x.stroke();
+  const hd=D.hd==null?0:D.hd;x.save();x.translate(cx,cy);x.rotate(-hd*Math.PI/180);
+  x.font="bold 13px system-ui";x.textAlign="center";x.textBaseline="middle";[["N",0,"#ff4b3e"],["E",90,"#cfd5dd"],["S",180,"#cfd5dd"],["W",270,"#cfd5dd"]].forEach(([l,a,col])=>{const t=a*Math.PI/180;x.fillStyle=col;x.fillText(l,Math.sin(t)*(R-12),-Math.cos(t)*(R-12))});x.restore();
+  x.fillStyle=D.hd==null?"#555":"#fff";x.beginPath();x.moveTo(cx,cy-R+20);x.lineTo(cx-7,cy+6);x.lineTo(cx+7,cy+6);x.closePath();x.fill();
+  x.fillStyle="#9aa3b0";x.font="11px system-ui";x.textAlign="center";x.fillText(D.hd==null?"heading":Math.round(D.hd)+"°",cx,cy+R-10)}
+/* drag-strip tree: 3 ambers, then green. Moving before green = red light. Reaction + 0-60 called out */
+$("bTree").onclick=()=>{if(X.tree)return;const p=D.p||{};if(p.s!=null&&p.s/1.609>=2){$("treeMsg").textContent="Stop the car first";return}
+  const T=$("tree");T.hidden=false;[...T.querySelectorAll("b")].forEach(b=>b.className="");$("treeMsg").textContent="Ready";X.tree={go:null,react:null,start:Date.now()};
+  [0,1,2].forEach(i=>setTimeout(()=>{if(!X.tree)return;T.querySelectorAll("b")[i].className="amb";beep()},600+i*500));
+  setTimeout(()=>{if(!X.tree)return;T.querySelectorAll("b")[3].className="grn";X.tree.go=Date.now();$("treeMsg").textContent="GO!"},2100)};
+$("tree").onclick=()=>{X.tree=null;$("tree").hidden=true};
+function treeTick(mph){const tr=X.tree;if(!tr||mph==null)return;
+  if(mph>=2&&!tr.go){$("tree").querySelectorAll("b")[4].className="red";$("treeMsg").textContent="RED LIGHT";say("Red light");tr.done=1;setTimeout(()=>{if(X.tree===tr){X.tree=null;$("tree").hidden=true}},3000);return}
+  if(tr.go&&mph>=2&&tr.react==null){tr.react=(Date.now()-tr.go)/1000;$("treeMsg").textContent="Reaction "+tr.react.toFixed(2)+" s"}
+  if(tr.react!=null&&D.r060&&!tr.done){tr.done=1;$("treeMsg").textContent="0-60 "+D.r060.toFixed(1)+" s · reaction "+tr.react.toFixed(2)+" s";say("Zero to sixty in "+D.r060.toFixed(1)+" seconds");setTimeout(()=>{if(X.tree===tr){X.tree=null;$("tree").hidden=true}},6000)}}
+function coolUpdate(p){const mph=p.s!=null?p.s/1.609:null,now=Date.now();
+  if(mph!=null){X.hist.push({t:now,v:cv(mph)});while(X.hist.length&&now-X.hist[0].t>120000)X.hist.shift();X.peakG=Math.max(X.peakG,Math.abs(D.g||0))}
+  if(p.la!=null&&(mph||0)>2){const q=[p.la,p.lo],l=X.route[X.route.length-1];if(!l||Math.abs(l[0]-q[0])+Math.abs(l[1]-q[1])>0.00003)X.route.push(q);if(X.route.length>3000)X.route.splice(0,1000)}
+  treeTick(mph);
+  if(D.r060&&D.r060!==X.said060&&!X.tree){X.said060=D.r060;say("Zero to sixty in "+D.r060.toFixed(1)+" seconds")}
+  if(D.rQm&&D.rQm!==X.saidQm){X.saidQm=D.rQm;say("Quarter mile in "+D.rQm.t.toFixed(1)+" seconds")}
+  coolRender()}
+function coolRender(){const p=D.p||{},mph=p.s!=null?p.s/1.609:null;leds(mph);drawSpark();drawRoute();drawCompass();
+  if(mph!=null)$("dG").textContent=(D.g>=0?"+":"")+D.g.toFixed(2)+" pk "+X.peakG.toFixed(2)}
+const _reset=$("bReset").onclick;$("bReset").onclick=()=>{_reset();X.route=[];X.hist=[];X.peakG=0;coolRender()};
+setInterval(()=>leds(D.p&&D.p.s!=null?D.p.s/1.609:null),250);
+coolRender();
 </script>
 </body>
 </html>
