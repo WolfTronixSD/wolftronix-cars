@@ -59,7 +59,12 @@ a{color:var(--warn)}
 <div class="t wide" id="fwbox" style="margin-bottom:12px">
   <span>Firmware update (car node main.py)</span>
   <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
-    <input type="file" id="fwfile" accept=".py,text/plain" style="color:var(--tx)">
+    <button id="upchk">Check for update</button>
+    <input type="password" id="fwpass" placeholder="Release passphrase (decrypts the update; remembered here)" autocomplete="off"
+      style="font:inherit;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--tx)">
+    <div id="upst" style="font-size:14px;color:var(--mut)">Checks the published release, downloads it, decrypts it on this phone and checks its SHA-256. Then enter the PIN and tap Install.</div>
+    <details><summary style="font-size:14px;color:var(--mut)">Or pick a main.py file yourself</summary>
+    <input type="file" id="fwfile" accept=".py,text/plain" style="color:var(--tx);margin-top:6px"></details>
     <input type="password" id="fwpin" placeholder="PIN (the first update sets it)" inputmode="numeric" autocomplete="off"
       style="font:inherit;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--tx)">
     <button id="fwgo">Install over Bluetooth</button>
@@ -73,7 +78,33 @@ const SVC="7a5e0001-3c1d-4b8e-9f2a-0c4b5d6e7f80",DATA="7a5e0002-3c1d-4b8e-9f2a-0
 const $=id=>document.getElementById(id);
 let dev=null,chD=null,chC=null,chF=null,busy=false,last=null,timer=null,lastT=0,lastP=null,fwRun=false,sending=false;
 const FW="7a5e0004-3c1d-4b8e-9f2a-0c4b5d6e7f80";
-try{$("fwpin").value=localStorage.getItem("carbox_pin")||""}catch(e){}
+let REL=null;   // decrypted release main.py, ready to install
+function upst(t,col){$("upst").textContent=t;$("upst").style.color=col||"var(--mut)"}
+function vt(v){return (v||"0").split(".").map(Number)}
+function newer(a,b){a=vt(a);b=vt(b);for(let i=0;i<Math.max(a.length,b.length);i++){if((a[i]||0)!==(b[i]||0))return (a[i]||0)>(b[i]||0)}return false}
+const b64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+$("upchk").onclick=async()=>{
+  REL=null;const pass=$("fwpass").value;
+  try{
+    upst("Checking ...");
+    const j=await (await fetch("fw/latest.json?"+Date.now(),{cache:"no-store"})).json();
+    const run=lastP?lastP.v:null;
+    if(run&&!newer(j.ver,run)){upst("Up to date: the box runs "+run+", latest release is "+j.ver+".","var(--ok)");return}
+    if(!pass){upst("Release "+j.ver+" available"+(run?" (box runs "+run+")":"")+". Enter the release passphrase, then tap Check again.","var(--warn)");return}
+    upst("Downloading "+j.ver+" ...");
+    const enc=new Uint8Array(await (await fetch("fw/"+j.file+"?"+Date.now(),{cache:"no-store"})).arrayBuffer());
+    const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(pass),"PBKDF2",false,["deriveKey"]);
+    const key=await crypto.subtle.deriveKey({name:"PBKDF2",salt:b64(j.salt),iterations:j.iter,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["decrypt"]);
+    let plain;
+    try{plain=new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM",iv:b64(j.iv)},key,enc))}catch(e){upst("Wrong passphrase (could not decrypt).","var(--bad)");return}
+    const h=[...new Uint8Array(await crypto.subtle.digest("SHA-256",plain))].map(b=>b.toString(16).padStart(2,"0")).join("");
+    if(h!==j.sha256){upst("Checksum does not match the release. Not installing.","var(--bad)");return}
+    try{localStorage.setItem("carbox_pass",pass)}catch(e){}
+    REL=plain;$("fwfile").value="";
+    upst("Release "+j.ver+" ready ("+Math.round(plain.length/1024)+" KB, SHA-256 OK). Enter the PIN and tap Install over Bluetooth.","var(--ok)");
+  }catch(e){upst("Could not check: "+e.message,"var(--bad)")}
+};
+try{$("fwpin").value=localStorage.getItem("carbox_pin")||"";$("fwpass").value=localStorage.getItem("carbox_pass")||""}catch(e){}
 function st(t){$("st").textContent=t}
 function diag(txt,sub,col){const d=$("diag");d.innerHTML="";d.append(txt);if(sub){const s=document.createElement("small");s.textContent=sub;d.append(s)}d.style.borderLeftColor=col}
 function hms(s){s=s|0;return s<60?s+" s":s<3600?Math.floor(s/60)+" min":Math.floor(s/3600)+" h "+Math.floor(s%3600/60)+" min"}
@@ -140,9 +171,9 @@ $("fwgo").onclick=async()=>{
   const file=$("fwfile").files[0],pin=$("fwpin").value.trim();
   if(!chC||!dev.gatt.connected){fwst("Connect to the CarBox first","var(--bad)");return}
   if(!chF){fwst("This box firmware has no Bluetooth update (needs 1.1.56+)","var(--bad)");return}
-  if(!file){fwst("Pick main.py first","var(--bad)");return}
+  if(!file&&!REL){fwst("Tap Check for update first (or pick main.py)","var(--bad)");return}
   if(pin.length<4){fwst("PIN: at least 4 characters","var(--bad)");return}
-  const buf=new Uint8Array(await file.arrayBuffer());
+  const buf=REL&&!file?REL:new Uint8Array(await file.arrayBuffer());
   const txt=new TextDecoder().decode(buf.slice(0,4000));
   const m=txt.match(/^VERSION = "([^"]+)"/m);
   if(!m||!txt.includes("car alarm node")){fwst("That is not a car node main.py","var(--bad)");return}
