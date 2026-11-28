@@ -1,0 +1,9 @@
+{
+ "ver": "1.1.58",
+ "size": 116289,
+ "sha256": "0b649eed6ade1dc4f0fb5d42560e4d452e3bb26ec82fb1e08793930d2703cc32",
+ "file": "car_main.enc",
+ "salt": "klkpqYWh4eWQEaadpgXbiA==",
+ "iv": "Ifur9kaVxgWAf8Oe",
+ "iter": 200000
+}
